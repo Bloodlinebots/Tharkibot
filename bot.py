@@ -2,21 +2,18 @@ import os
 import json
 import random
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
-    filters, ContextTypes
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import BadRequest
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-VAULT_CHANNEL_ID = -1002572348022  # Your private channel ID
-FORCE_JOIN_CHANNEL = "sjsjsskrj"   # Channel username (no @)
-ADMIN_USER_ID =   7755789304       # Your Telegram user ID
+VAULT_CHANNEL_ID = -1002572348022
+FORCE_JOIN_CHANNEL = "sjsjsskrj"
+ADMIN_USER_ID = 7755789304
 
 VIDEO_IDS_FILE = "video_ids.json"
 USER_SEEN_FILE = "user_seen.json"
 
-# ---------- JSON Helper ----------
+# -------------------- JSON HELPERS --------------------
 def load_json(filename, default):
     if not os.path.exists(filename):
         with open(filename, "w") as f:
@@ -28,7 +25,7 @@ def save_json(filename, data):
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
 
-# ---------- Video Logic ----------
+# -------------------- VIDEO SYSTEM --------------------
 def get_unseen_video(user_id):
     all_ids = load_json(VIDEO_IDS_FILE, [])
     seen_map = load_json(USER_SEEN_FILE, {})
@@ -36,10 +33,9 @@ def get_unseen_video(user_id):
     unseen = list(set(all_ids) - set(seen))
 
     if not all_ids:
-        return None  # No videos at all
-
+        return None
     if not unseen:
-        return None  # All videos seen
+        return None
 
     return random.choice(unseen)
 
@@ -51,7 +47,7 @@ def mark_seen(user_id, msg_id):
     seen_map[str(user_id)] = seen
     save_json(USER_SEEN_FILE, seen_map)
 
-# ---------- Force Join Check ----------
+# -------------------- JOIN CHECK --------------------
 async def is_user_joined(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", user_id)
@@ -59,7 +55,7 @@ async def is_user_joined(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bo
     except BadRequest:
         return False
 
-# ---------- /start ----------
+# -------------------- START COMMAND --------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await is_user_joined(user_id, context):
@@ -68,20 +64,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You must join our channel to use this bot.", reply_markup=markup)
         return
 
-    buttons = [
+    welcome_buttons = [
         [InlineKeyboardButton("your_button_name 1", url="https://t.me/unbornvillian")],
         [InlineKeyboardButton("your_button_name 2", url="https://t.me/unbornvillian")]
     ]
     await update.message.reply_photo(
         photo="https://files.catbox.moe/fxsuba.jpg",
         caption="🥵 Welcome to TharkiHub!\n👇 Tap below to explore:",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        reply_markup=InlineKeyboardMarkup(welcome_buttons)
     )
 
     video_btn = [[InlineKeyboardButton("📥 Get Random MMS Video", callback_data="get_video")]]
     await update.message.reply_text("🔥 Want a random MMS? Tap below:", reply_markup=InlineKeyboardMarkup(video_btn))
 
-# ---------- Video Button ----------
+# -------------------- VIDEO BUTTON HANDLER --------------------
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -110,7 +106,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except BadRequest:
         await query.message.reply_text("⚠️ Error: Video not found or deleted.")
 
-# ---------- Admin: /add_video ----------
+# -------------------- ADD VIDEO --------------------
 async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_USER_ID:
         await update.message.reply_text("❌ You are not authorized.")
@@ -121,14 +117,11 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg_id = update.message.reply_to_message.message_id
-    print("Storing message ID:", msg_id)  # Debug print
-
     video_ids = load_json(VIDEO_IDS_FILE, [])
     if msg_id not in video_ids:
         video_ids.append(msg_id)
         save_json(VIDEO_IDS_FILE, video_ids)
 
-        # ✅ Try forwarding the video now to confirm it's accessible
         try:
             await context.bot.forward_message(
                 chat_id=update.effective_chat.id,
@@ -141,14 +134,20 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ This video is already in the list.")
 
-# ---------- Admin: /delete_video ----------
+# -------------------- DELETE VIDEO --------------------
 async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_USER_ID:
         await update.message.reply_text("❌ You are not authorized.")
         return
 
+    if context.args and context.args[0].lower() == "all":
+        save_json(VIDEO_IDS_FILE, [])
+        save_json(USER_SEEN_FILE, {})
+        await update.message.reply_text("🗑️ All videos and user history deleted successfully.")
+        return
+
     if not update.message.reply_to_message:
-        await update.message.reply_text("⚠️ Reply to a video message to delete it.")
+        await update.message.reply_text("⚠️ Reply to a video message to delete it or use /delete_video all")
         return
 
     msg_id = update.message.reply_to_message.message_id
@@ -166,7 +165,7 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ This video was not found in the list.")
 
-# ---------- Main ----------
+# -------------------- MAIN --------------------
 def main():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
