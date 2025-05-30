@@ -11,7 +11,7 @@ from telegram.error import BadRequest
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002572348022  # Replace with your private channel ID
 FORCE_JOIN_CHANNEL = "sjsjsskrj"   # Replace with your channel username (without @)
-ADMIN_USER_ID = 7755789304  # Replace with your Telegram user ID
+ADMIN_USER_ID = 6147525316  # Replace with your Telegram user ID
 
 VIDEO_IDS_FILE = "video_ids.json"
 USER_SEEN_FILE = "user_seen.json"
