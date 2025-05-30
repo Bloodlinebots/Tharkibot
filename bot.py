@@ -8,7 +8,7 @@ from telegram.error import BadRequest
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002572348022  # Replace with your private channel ID
 FORCE_JOIN_CHANNEL = "sjsjsskrj"   # Replace with your channel username (without @)
-ADMIN_ID = your_user_id  # 🔐 Replace with your own Telegram ID (integer)
+ADMIN_ID = 7755789304  # 🔐 Replace with your own Telegram ID (integer)
 
 VIDEO_IDS_FILE = "video_ids.json"
 USER_HISTORY_FILE = "user_history.json"
