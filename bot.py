@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import BadRequest
 
-TOKEN = os.getenv("7634054357:AAEE-mFeNqAZbayG2a7fFtJRw-Vb9e9DZZA")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002572348022 # Replace with your private channel ID
 FORCE_JOIN_CHANNEL = "sjsjsskrj"  # Replace with your channel username (without @)
 VIDEO_MESSAGE_IDS = [7,10]  # Replace with your video message IDs
