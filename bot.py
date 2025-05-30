@@ -1,12 +1,12 @@
 import os
 import json
 import random
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputFile
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.error import BadRequest
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-VAULT_CHANNEL_ID = -1002624785490
+VAULT_CHANNEL_ID = -1002572348022
 FORCE_JOIN_CHANNEL = "sjsjsskrj"
 ADMIN_USER_ID = 7755789304
 
@@ -154,12 +154,38 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ This video was not found in the list.")
 
+async def upload_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_USER_ID:
+        await update.message.reply_text("❌ You are not authorized.")
+        return
+
+    if not update.message.video:
+        await update.message.reply_text("⚠️ Please send a video to upload.")
+        return
+
+    try:
+        sent = await context.bot.copy_message(
+            chat_id=VAULT_CHANNEL_ID,
+            from_chat_id=update.message.chat_id,
+            message_id=update.message.message_id
+        )
+        video_ids = load_json(VIDEO_IDS_FILE, [])
+        if sent.message_id not in video_ids:
+            video_ids.append(sent.message_id)
+            save_json(VIDEO_IDS_FILE, video_ids)
+            await update.message.reply_text("✅ Video uploaded to vault and added successfully.")
+        else:
+            await update.message.reply_text("⚠️ Video already exists.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to upload: {e}")
+
 def main():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler, pattern="get_video"))
     application.add_handler(CommandHandler("add_video", add_video))
     application.add_handler(CommandHandler("delete_video", delete_video))
+    application.add_handler(MessageHandler(filters.VIDEO & filters.TEXT("/upload_video"), upload_video))
     application.run_polling()
 
 if __name__ == "__main__":
