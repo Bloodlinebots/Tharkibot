@@ -4,10 +4,10 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.error import BadRequest
 
-TOKEN = os.getenv("BOT_TOKEN")
-VAULT_CHANNEL_ID = -1001234567890  # Replace with your private channel ID
-FORCE_JOIN_CHANNEL = "your_channel_name"  # Replace with your channel username (without @)
-VIDEO_MESSAGE_IDS = [7, 13, 21, 42, 55]  # Replace with your video message IDs
+TOKEN = os.getenv("7634054357:AAHXEJ7-0MceaN1XO_S5QFkLRkppL9TK0Mk")
+VAULT_CHANNEL_ID = -1002572348022 # Replace with your private channel ID
+FORCE_JOIN_CHANNEL = "sjsjsskrj"  # Replace with your channel username (without @)
+VIDEO_MESSAGE_IDS = [7,10]  # Replace with your video message IDs
 
 async def is_user_joined(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
