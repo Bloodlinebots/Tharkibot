@@ -3,7 +3,14 @@ import json
 import random
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    CallbackQueryHandler,
+    filters
+)
 
 # ---------------- CONFIG ----------------
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -13,6 +20,7 @@ ADMIN_USER_ID = 7755789304
 TERMS_LINK = "https://t.me/bot_backup/7"
 DEVELOPER_LINK = "https://t.me/unbornvillian"
 SUPPORT_LINK = "https://t.me/botmine_tech"
+WELCOME_IMAGE = "https://files.catbox.moe/19j4mc.jpg"
 
 VIDEO_FILE = "video_ids.json"
 USER_FILE = "user_seen.json"
@@ -48,10 +56,11 @@ def is_sudo(uid):
 def is_banned(uid):
     return uid in banned_users
 
-# ---------------- COMMANDS ----------------
+# ---------------- HANDLERS ----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if is_banned(uid): return
+    if is_banned(uid):
+        return
 
     try:
         member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", uid)
@@ -61,7 +70,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
             await update.message.reply_text(
                 "🚫 You must join our channel to use this bot.\n\n"
-                "⚠️ Note: If you leave the channel, you will be restricted from using the bot.\n"
+                "⚠️ Note: If you leave the channel, you will be restricted from using the bot.\n\n"
                 "✅ After joining, please use /start",
                 reply_markup=btn
             )
@@ -69,37 +78,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         return
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-        [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
-    ])
-    await update.message.reply_text(
-        "🥵 Welcome to TharkiHub!\n👇 Tap below to explore:",
-        reply_markup=keyboard
+    await update.message.reply_photo(
+        photo=WELCOME_IMAGE,
+        caption="🥵 Welcome to TharkiHub!\n👇 Tap below to explore:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+            [InlineKeyboardButton("📘 View Terms", url=TERMS_LINK)],
+            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
+            [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
+        ])
     )
 
-    disclaimer = (
-        "⚠️ Disclaimer:\n"
-        "We do not support or promote any adult content.\n"
-        "This bot contains 18+ content. Use at your own discretion."
-    )
-    terms_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📘 View Terms", url=TERMS_LINK)]
-    ])
-    await update.message.reply_text(disclaimer, reply_markup=terms_btn)
+async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    uid = query.from_user.id
+    await query.answer()
 
-async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if is_banned(uid): return
-    if not videos:
-        await update.message.reply_text("⚠️ No videos available in vault.")
+    if is_banned(uid):
         return
 
+    now = asyncio.get_event_loop().time()
     if not is_admin(uid):
-        now = asyncio.get_event_loop().time()
         if uid in cooldowns and cooldowns[uid] > now:
             wait = int(cooldowns[uid] - now)
-            await update.message.reply_text(f"⏳ Please wait {wait} seconds before getting another video.")
+            await query.message.reply_text(f"⏳ Please wait {wait} seconds before getting another video.")
             return
         cooldowns[uid] = now + cooldown_time
 
@@ -107,39 +109,35 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     unseen = list(set(videos) - set(seen))
 
     if not unseen:
-        await update.message.reply_text("✅ You have watched all videos of our server 😅")
+        await query.message.reply_text("✅ You have watched all videos of our server 😅")
         user_seen[str(uid)] = []
         save_json(USER_FILE, user_seen)
         return
 
     msg_id = random.choice(unseen)
     try:
-        await context.bot.forward_message(uid, VAULT_CHANNEL_ID, msg_id)
+        await context.bot.copy_message(
+            chat_id=uid,
+            from_chat_id=VAULT_CHANNEL_ID,
+            message_id=msg_id
+        )
         seen.append(msg_id)
         user_seen[str(uid)] = seen
         save_json(USER_FILE, user_seen)
+
+        await query.message.reply_text(
+            "Want another? 😈",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]
+            ])
+        )
     except:
-        await update.message.reply_text("⚠️ Video not found or deleted.")
-
-async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_sudo(uid): return
-
-    if update.message.reply_to_message:
-        try:
-            msg_id = update.message.reply_to_message.message_id
-            if msg_id not in videos:
-                videos.append(msg_id)
-                save_json(VIDEO_FILE, videos)
-                await update.message.reply_text("✅ Video added successfully.")
-            else:
-                await update.message.reply_text("⚠️ Video is already in list.")
-        except:
-            await update.message.reply_text("⚠️ Failed to add video.")
+        await query.message.reply_text("⚠️ Video not found or deleted.")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not is_sudo(uid): return
+    if not is_sudo(uid):
+        return
 
     if update.message.video:
         try:
@@ -154,31 +152,11 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await update.message.reply_text("⚠️ Failed to upload.")
 
-async def delete_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    videos.clear()
-    save_json(VIDEO_FILE, videos)
-    save_json(USER_FILE, {})
-    await update.message.reply_text("🧹 All videos and seen data deleted.")
-
-async def stat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_sudo(update.effective_user.id): return
-    await update.message.reply_text(
-        f"📊 Stats:\n"
-        f"Total videos: {len(videos)}\n"
-        f"Total users: {len(user_seen)}\n"
-        f"Banned: {len(banned_users)}\n"
-        f"Sudos: {len(sudo_users)}"
-    )
-
 # ---------------- MAIN ----------------
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("get", get_random_video))
-app.add_handler(CommandHandler("add_video", add_video))
-app.add_handler(CommandHandler("delete_all", delete_all))
-app.add_handler(CommandHandler("stat", stat))
+app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
 app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
 print("✅ Bot is running...")
