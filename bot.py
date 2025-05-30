@@ -14,9 +14,8 @@ from telegram.error import BadRequest
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002572348022
-FORCE_JOIN_CHANNEL = "sjsjsskrj"
-ADMIN_USER_IDS = [7755789304]
-LOGGER_GROUP_ID = -1001992970818
+FORCE_JOIN_CHANNEL = "bot_backup" #without @
+ADMIN_USER_IDS = [7755789304] #owner
 
 VIDEO_IDS_FILE = "video_ids.json"
 USER_SEEN_FILE = "user_seen.json"
@@ -43,12 +42,15 @@ def get_unseen_video(user_id):
     seen_map = load_json(USER_SEEN_FILE, {})
     seen = seen_map.get(str(user_id), [])
     unseen = list(set(all_ids) - set(seen))
+
     if not all_ids:
         return None
+
     if not unseen:
         seen_map[str(user_id)] = []
         save_json(USER_SEEN_FILE, seen_map)
-        unseen = all_ids.copy()
+        return "RESET"
+
     return random.choice(unseen)
 
 def mark_seen(user_id, msg_id):
@@ -81,6 +83,13 @@ async def is_user_joined(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bo
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    user = update.effective_user
+
+    # Notify admin
+    admin_id = ADMIN_USER_IDS[0]
+    mention = f"@{user.username}" if user.username else user.first_name
+    text = f"🚀 User started the bot\nID: <code>{user_id}</code>\nName: {mention}"
+    await context.bot.send_message(chat_id=admin_id, text=text, parse_mode="HTML")
 
     if not await is_user_joined(user_id, context):
         join_button = InlineKeyboardButton("🔗 Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")
@@ -88,11 +97,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You must join our channel to use this bot.", reply_markup=reply_markup)
         return
 
-    await context.bot.send_message(chat_id=LOGGER_GROUP_ID, text=f"🟢 User started bot: {user_id}")
-
     buttons = [
-        [InlineKeyboardButton("your_button_name 1", url="https://t.me/your_username")],
-        [InlineKeyboardButton("your_button_name 2", url="https://t.me/your_username")]
+        [InlineKeyboardButton("DEVELOPER", url="https://t.me/UNBORNVILLIAN")],
+        [InlineKeyboardButton("SUPPORT", url="https://t.me/BOTMINE_TECH")]
     ]
     await update.message.reply_photo(
         photo="https://files.catbox.moe/fxsuba.jpg",
@@ -107,7 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "All content is user-submitted, and we hold no responsibility for any misuse."
     )
     terms_button = [
-        [InlineKeyboardButton("📘 View Terms", url="https://t.me/your_channel_or_policy_link")]
+        [InlineKeyboardButton("📘 View Terms", url="https://t.me/bot_backup/7")]
     ]
     await update.message.reply_text(
         text=terms_text,
@@ -124,7 +131,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not await is_user_joined(user_id, context):
         join_button = InlineKeyboardButton("🔗 Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")
-        await query.message.reply_text("🚫 You must join our channel to use this bot.", reply_markup=InlineKeyboardMarkup([[join_button]]))
+        await query.message.reply_text("🚫 You must join our channel to use this bot./n note: if you leave chaneel the  you will be blocked again.",
+                                       reply_markup=InlineKeyboardMarkup([[join_button]]))
         return
 
     now = time.time()
@@ -134,8 +142,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_sent_time[user_id] = now
 
     msg_id = get_unseen_video(user_id)
+
+    if msg_id == "RESET":
+        await query.message.reply_text("✅ You have already watched all videos. Restarting again...")
+        msg_id = random.choice(load_json(VIDEO_IDS_FILE, []))
+
     if msg_id is None:
-        await query.message.reply_text("✅ You have watched all videos of our server. Enjoy! 😊")
+        await query.message.reply_text("⚠️ No videos available in vault.")
         return
 
     try:
@@ -150,7 +163,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyboard = [[InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]]
-    await query.message.reply_text("Want one more? 😈", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.reply_text("Want one more? 🙈", reply_markup=InlineKeyboardMarkup(keyboard))
 
 # ------------------------ Main ------------------------
 
