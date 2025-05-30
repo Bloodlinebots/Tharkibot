@@ -1,0 +1,24 @@
+{
+  "name": "TharkiHubBot",
+  "description": "Telegram bot with force join and random video forwarding",
+  "env": {
+    "BOT_TOKEN": {
+      "description": "Telegram bot token from BotFather",
+      "required": true
+    }
+  },
+  "scripts": {
+    "start": "python bot.py"
+  },
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "standard-1x"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
