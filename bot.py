@@ -5,9 +5,9 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from telegram.error import BadRequest
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-VAULT_CHANNEL_ID = -1002572348022 # Replace with your private channel ID
-FORCE_JOIN_CHANNEL = "sjsjsskrj"  # Replace with your channel username (without @)
-VIDEO_MESSAGE_IDS = [7,10]  # Replace with your video message IDs
+VAULT_CHANNEL_ID = -1002572348022  # Replace with your private channel ID
+FORCE_JOIN_CHANNEL = "sjsjsskrj"   # Replace with your channel username (without @)
+VIDEO_MESSAGE_IDS = [4,7,10]        # Replace with your video message IDs
 
 async def is_user_joined(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
@@ -24,11 +24,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You must join our channel to use this bot.", reply_markup=reply_markup)
         return
 
-    keyboard = [[InlineKeyboardButton("📥 Get Random MMS Video", callback_data="get_video")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "🥵 Welcome to TharkiHub!\nTap below to get your random clip:", reply_markup=reply_markup
+    # Welcome image + 2 buttons
+    welcome_buttons = [
+        [
+            InlineKeyboardButton("your_button_name 1", url="https://t.me/unbornvillian"),
+            InlineKeyboardButton("your_button_name 2", url="https://t.me/unbornvillian")
+        ]
+    ]
+    welcome_markup = InlineKeyboardMarkup(welcome_buttons)
+    await update.message.reply_photo(
+        photo="https://files.catbox.moe/fxsuba.jpg",
+        caption="🥵 Welcome to TharkiHub!\n👇 Tap below to explore:",
+        reply_markup=welcome_markup
     )
+
+    # Separate button for video fetch
+    get_video_keyboard = [[InlineKeyboardButton("📥 Get Random MMS Video", callback_data="get_video")]]
+    get_video_markup = InlineKeyboardMarkup(get_video_keyboard)
+    await update.message.reply_text("🔥 Want a random MMS? Tap below:", reply_markup=get_video_markup)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
