@@ -282,7 +282,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_sudo(update.effective_user.id): return
-    await update.message.reply_text(\"\"\"🤖 Bot Help:
+    await update.message.reply_text(\"""🤖 Bot Help:
     /start - Start bot
     /add_video - Add video (reply or msg_id)
     /delete_video - Delete video (reply)
