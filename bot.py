@@ -1,6 +1,6 @@
 import os import json import random import asyncio import time from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update from telegram.ext import ( Application, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters ) from telegram.error import BadRequest
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") VAULT_CHANNEL_ID = -1002572348022 FORCE_JOIN_CHANNEL = "sjsjsskrj" ADMIN_USER_IDS = [7755789304] LOGGER_GROUP_ID = your_logger_group_id
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") VAULT_CHANNEL_ID = -1002572348022 FORCE_JOIN_CHANNEL = "sjsjsskrj" ADMIN_USER_IDS = [7755789304] LOGGER_GROUP_ID = -1001992970818
 
 VIDEO_IDS_FILE = "video_ids.json" USER_SEEN_FILE = "user_seen.json" SUDO_FILE = "sudo_users.json" LAST_RESTART_FILE = "restart_time.txt"
 
