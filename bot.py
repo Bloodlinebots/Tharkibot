@@ -121,11 +121,23 @@ async def add_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg_id = update.message.reply_to_message.message_id
+    print("Storing message ID:", msg_id)  # Debug print
+
     video_ids = load_json(VIDEO_IDS_FILE, [])
     if msg_id not in video_ids:
         video_ids.append(msg_id)
         save_json(VIDEO_IDS_FILE, video_ids)
-        await update.message.reply_text("✅ Video added successfully.")
+
+        # ✅ Try forwarding the video now to confirm it's accessible
+        try:
+            await context.bot.forward_message(
+                chat_id=update.effective_chat.id,
+                from_chat_id=VAULT_CHANNEL_ID,
+                message_id=msg_id
+            )
+            await update.message.reply_text("✅ Video added and verified successfully.")
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Video saved but could not be accessed: {e}")
     else:
         await update.message.reply_text("⚠️ This video is already in the list.")
 
