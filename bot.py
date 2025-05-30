@@ -185,7 +185,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler, pattern="get_video"))
     application.add_handler(CommandHandler("add_video", add_video))
     application.add_handler(CommandHandler("delete_video", delete_video))
-    application.add_handler(MessageHandler(filters.VIDEO & filters.TEXT("/upload_video"), upload_video))
+    application.add_handler(MessageHandler(filters.VIDEO, upload_video))
     application.run_polling()
 
 if __name__ == "__main__":
