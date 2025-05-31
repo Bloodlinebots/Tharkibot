@@ -404,7 +404,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
-    app.add_handler(MessageHandler(filters.Video.ALL & filters.User(user_id=sudo_users), auto_upload))
+    app.add_handler(MessageHandler(filters.VIDEO & filters.User(user_id=sudo_users), auto_upload))
 
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("backup", backup))
