@@ -88,21 +88,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Here you will access the most unseen videos.\n👇 Tap below to explore:"
     )
 
+    # Welcome photo WITHOUT Disclaimer button
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
         caption=caption,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-            [InlineKeyboardButton("Disclaimer", callback_data="show_disclaimer")],
             [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
             [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
         ])
     )
 
-async def show_disclaimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    text = (
+    # Separate Disclaimer message with Terms link
+    disclaimer_text = (
         "⚠️ **Disclaimer** ⚠️\n\n"
         "We do NOT produce or spread adult content.\n"
         "This bot is only for file forwarding.\n"
@@ -110,10 +108,16 @@ async def show_disclaimer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Please read terms and conditions carefully."
     )
     buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)],
-        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_start")]
+        [InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]
     ])
-    await query.edit_message_text(text=text, reply_markup=buttons, parse_mode='Markdown')
+
+    await context.bot.send_message(
+        chat_id=uid,
+        text=disclaimer_text,
+        reply_markup=buttons,
+        parse_mode='Markdown'
+    )
+
 
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -127,7 +131,6 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         media=InputMediaPhoto(WELCOME_IMAGE, caption=caption),
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-            [InlineKeyboardButton("Disclaimer", callback_data="show_disclaimer")],
             [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
             [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
         ])
@@ -359,7 +362,6 @@ app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
-app.add_handler(CallbackQueryHandler(show_disclaimer, pattern="show_disclaimer"))
 app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
 app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
