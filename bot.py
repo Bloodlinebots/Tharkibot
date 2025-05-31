@@ -9,12 +9,14 @@ from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
+    MessageHandler,  # ✅ FIXED
     ContextTypes,
+    filters,         # ✅ FIXED
 )
 
 # Configurations
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-VAULT_CHANNEL_ID = -1002524417957
+VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
 TERMS_LINK = "https://t.me/bot_backup/7"
@@ -256,9 +258,6 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("If you need any help then contact developer")
 
-# Admin commands below (broadcast, backup, deletevideo, sudo add/rm, ban/unban)
-# ... (same as previous, add them if needed)
-
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❓ Unknown command.")
 
@@ -268,12 +267,13 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
-
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="^get_video$"))
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="^back$"))
     app.add_handler(CallbackQueryHandler(show_help_callback, pattern="^show_help$"))
 
-    # Add other command handlers here...
+    app.add_handler(MessageHandler(filters.VIDEO, auto_upload))  # ✅ Video upload for sudo users
+
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))  # Unknown commands
 
     app.run_polling()
 
