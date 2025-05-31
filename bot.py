@@ -3,6 +3,7 @@ import json
 import random
 import asyncio
 import zipfile
+import threading
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     ApplicationBuilder,
@@ -10,7 +11,7 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     CallbackQueryHandler,
-    filters
+    filters,
 )
 
 # ---------------- CONFIG ----------------
@@ -34,12 +35,12 @@ cooldowns = {}
 # ---------------- HELPERS ----------------
 def load_json(file, default):
     if os.path.exists(file):
-        with open(file, 'r') as f:
+        with open(file, "r") as f:
             return json.load(f)
     return default
 
 def save_json(file, data):
-    with open(file, 'w') as f:
+    with open(file, "w") as f:
         json.dump(data, f, indent=2)
 
 videos = load_json(VIDEO_FILE, [])
@@ -57,6 +58,16 @@ def is_sudo(uid):
 def is_banned(uid):
     return uid in banned_users
 
+# ---------------- AUTO DELETE HELPER ----------------
+def delete_after_delay(bot, chat_id, message_id, delay):
+    import time
+
+    time.sleep(delay)
+    try:
+        asyncio.run(bot.delete_message(chat_id=chat_id, message_id=message_id))
+    except:
+        pass
+
 # ---------------- HANDLERS ----------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,23 +77,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are banned from using this bot.")
         return
 
+    # Force join channel check
     try:
         member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", uid)
         if member.status in ["left", "kicked"]:
-            btn = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")]
-            ])
+            btn = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")]]
+            )
             await update.message.reply_text(
                 "🚫 You must join our channel to use this bot.\n\n"
                 "⚠️ Note: If you leave the channel, you will be restricted from using the bot.\n\n"
                 "✅ After joining, please use /start",
-                reply_markup=btn
+                reply_markup=btn,
             )
             return
     except Exception:
         pass
 
-    # New feature: send a log message in vault channel when user starts bot
+    # Log new user start in vault channel
     user = update.effective_user
     log_text = (
         f"📥 New User Started Bot\n\n"
@@ -101,11 +113,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
         caption=caption,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-            [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
-        ])
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+                [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
+                [
+                    InlineKeyboardButton("Support", url=SUPPORT_LINK),
+                    InlineKeyboardButton("Help", callback_data="show_privacy_info"),
+                ],
+            ]
+        ),
     )
 
     disclaimer_text = (
@@ -115,15 +132,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "If the file content contains adult videos, the bot holds no responsibility.\n"
         "Please read terms and conditions carefully."
     )
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]
-    ])
+    buttons = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]
+    )
 
     await context.bot.send_message(
-        chat_id=uid,
-        text=disclaimer_text,
-        reply_markup=buttons,
-        parse_mode='Markdown'
+        chat_id=uid, text=disclaimer_text, reply_markup=buttons, parse_mode="Markdown"
     )
 
 
@@ -137,12 +151,18 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await query.edit_message_media(
         media=InputMediaPhoto(WELCOME_IMAGE, caption=caption),
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-            [InlineKeyboardButton("Support", url=SUPPORT_LINK)]
-        ])
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+                [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
+                [
+                    InlineKeyboardButton("Support", url=SUPPORT_LINK),
+                    InlineKeyboardButton("Help", callback_data="show_privacy_info"),
+                ],
+            ]
+        ),
     )
+
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -157,7 +177,9 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(uid):
         if uid in cooldowns and cooldowns[uid] > now:
             wait = int(cooldowns[uid] - now)
-            await query.message.reply_text(f"⏳ Please wait {wait} seconds before getting another video.")
+            await query.message.reply_text(
+                f"⏳ Please wait {wait} seconds before getting another video."
+            )
             return
         cooldowns[uid] = now + cooldown_time
 
@@ -165,7 +187,9 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     unseen = list(set(videos) - set(seen))
 
     if not unseen:
-        await query.message.reply_text("✅ You have watched all videos of our server 😅\nRestarting the list for you!")
+        await query.message.reply_text(
+            "✅ You have watched all videos of our server 😅\nRestarting the list for you!"
+        )
         user_seen[str(uid)] = []
         save_json(USER_FILE, user_seen)
         unseen = videos.copy()
@@ -174,20 +198,28 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     for msg_id in unseen:
         try:
-            await context.bot.copy_message(
+            sent = await context.bot.copy_message(
                 chat_id=uid,
                 from_chat_id=VAULT_CHANNEL_ID,
-                message_id=msg_id
+                message_id=msg_id,
+                protect_content=True,  # restrict forward/save
             )
+            # Auto-delete after 3 hours (10800 seconds)
+            threading.Thread(
+                target=delete_after_delay,
+                args=(context.bot, uid, sent.message_id, 10800),
+                daemon=True,
+            ).start()
+
             seen.append(msg_id)
             user_seen[str(uid)] = seen
             save_json(USER_FILE, user_seen)
 
             await query.message.reply_text(
                 "Want another? 😈",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]
-                ])
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]]
+                ),
             )
             return
         except Exception:
@@ -195,7 +227,10 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 videos.remove(msg_id)
                 save_json(VIDEO_FILE, videos)
 
-    await query.message.reply_text("⚠️ No videos available right now, please try later.")
+    await query.message.reply_text(
+        "⚠️ No videos available right now, please try later."
+    )
+
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -207,13 +242,37 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.copy_message(
                 chat_id=VAULT_CHANNEL_ID,
                 from_chat_id=update.message.chat_id,
-                message_id=update.message.message_id
+                message_id=update.message.message_id,
             )
             videos.append(sent.message_id)
             save_json(VIDEO_FILE, videos)
             await update.message.reply_text("✅ Video uploaded and saved to vault.")
         except Exception:
             await update.message.reply_text("⚠️ Failed to upload.")
+
+
+# ---------------- NEW CALLBACK for Help Button ----------------
+async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text(
+        "/privacy - Use this to see bot's Terms and Conditions"
+    )
+
+
+# ---------------- /privacy COMMAND ----------------
+async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await context.bot.forward_message(
+            chat_id=update.effective_chat.id, from_chat_id="@bot_backup", message_id=7
+        )
+    except Exception:
+        await update.message.reply_text("⚠️ Failed to fetch privacy message.")
+
+
+# ---------------- /help COMMAND ----------------
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("If you need any help then contact developer")
+
 
 # ------------- ADMIN COMMANDS --------------
 
@@ -223,7 +282,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are not authorized to use this command.")
         return
 
-    text = update.message.text.partition(' ')[2]
+    text = update.message.text.partition(" ")[2]
     if not text:
         await update.message.reply_text("Usage: /broadcast Your message here")
         return
@@ -237,6 +296,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     await update.message.reply_text(f"📣 Broadcast sent to {count} users.")
 
+
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_sudo(uid):
@@ -246,14 +306,15 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     files_to_backup = [VIDEO_FILE, USER_FILE, SUDO_FILE, BANNED_FILE]
     zip_path = "backup.zip"
     try:
-        with zipfile.ZipFile(zip_path, 'w') as zipf:
+        with zipfile.ZipFile(zip_path, "w") as zipf:
             for f in files_to_backup:
                 if os.path.exists(f):
                     zipf.write(f, arcname=os.path.basename(f))
-        await context.bot.send_document(chat_id=uid, document=open(zip_path, 'rb'))
+        await context.bot.send_document(chat_id=uid, document=open(zip_path, "rb"))
         os.remove(zip_path)
     except Exception as e:
         await update.message.reply_text(f"⚠️ Backup failed: {e}")
+
 
 async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -277,6 +338,7 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Error: {e}")
 
+
 async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid):
@@ -289,15 +351,39 @@ async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        new_sudo = int(args[0])
-        if new_sudo not in sudo_users:
-            sudo_users.append(new_sudo)
+        new_id = int(args[0])
+        if new_id not in sudo_users:
+            sudo_users.append(new_id)
             save_json(SUDO_FILE, sudo_users)
-            await update.message.reply_text(f"✅ User {new_sudo} added as sudo.")
+            await update.message.reply_text(f"✅ User {new_id} added to sudo users.")
         else:
-            await update.message.reply_text("User already sudo.")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {e}")
+            await update.message.reply_text("User is already a sudo user.")
+    except Exception:
+        await update.message.reply_text("Invalid user id.")
+
+
+async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not is_admin(uid):
+        await update.message.reply_text("🚫 Only admin can remove sudo users.")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /rmsudo user_id")
+        return
+
+    try:
+        rem_id = int(args[0])
+        if rem_id in sudo_users:
+            sudo_users.remove(rem_id)
+            save_json(SUDO_FILE, sudo_users)
+            await update.message.reply_text(f"✅ User {rem_id} removed from sudo users.")
+        else:
+            await update.message.reply_text("User is not a sudo user.")
+    except Exception:
+        await update.message.reply_text("Invalid user id.")
+
 
 async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -311,15 +397,16 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        user_to_ban = int(args[0])
-        if user_to_ban not in banned_users:
-            banned_users.append(user_to_ban)
+        ban_id = int(args[0])
+        if ban_id not in banned_users:
+            banned_users.append(ban_id)
             save_json(BANNED_FILE, banned_users)
-            await update.message.reply_text(f"🚫 User {user_to_ban} banned.")
+            await update.message.reply_text(f"🚫 User {ban_id} banned.")
         else:
-            await update.message.reply_text("User already banned.")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {e}")
+            await update.message.reply_text("User is already banned.")
+    except Exception:
+        await update.message.reply_text("Invalid user id.")
+
 
 async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -333,52 +420,51 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        user_to_unban = int(args[0])
-        if user_to_unban in banned_users:
-            banned_users.remove(user_to_unban)
+        unban_id = int(args[0])
+        if unban_id in banned_users:
+            banned_users.remove(unban_id)
             save_json(BANNED_FILE, banned_users)
-            await update.message.reply_text(f"✅ User {user_to_unban} unbanned.")
+            await update.message.reply_text(f"✅ User {unban_id} unbanned.")
         else:
-            await update.message.reply_text("User not banned.")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {e}")
+            await update.message.reply_text("User is not banned.")
+    except Exception:
+        await update.message.reply_text("Invalid user id.")
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_sudo(uid):
-        await update.message.reply_text("🚫 You are not authorized to view stats.")
-        return
-
-    total_videos = len(videos)
-    total_users = len(user_seen)
-    total_sudos = len(sudo_users)
-    total_banned = len(banned_users)
-
-    text = (
-        f"📊 Bot Statistics:\n"
-        f"Total Videos: {total_videos}\n"
-        f"Total Users: {total_users}\n"
-        f"Sudo Users: {total_sudos}\n"
-        f"Banned Users: {total_banned}"
-    )
-
-    await update.message.reply_text(text)
 
 # ---------------- MAIN ----------------
-app = ApplicationBuilder().token(TOKEN).build()
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❓ Unknown command.")
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
-app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
-app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("backup", backup))
-app.add_handler(CommandHandler("deletevideo", delete_video))
-app.add_handler(CommandHandler("addsudo", add_sudo))
-app.add_handler(CommandHandler("ban", ban_user))
-app.add_handler(CommandHandler("unban", unban_user))
-app.add_handler(CommandHandler("stats", stats))
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-print("Bot is starting...")
-app.run_polling()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("privacy", privacy_command))
+    app.add_handler(CommandHandler("help", help_command))
+
+    # Admin/Sudo commands
+    app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("backup", backup))
+    app.add_handler(CommandHandler("deletevideo", delete_video))
+    app.add_handler(CommandHandler("addsudo", add_sudo))
+    app.add_handler(CommandHandler("rmsudo", remove_sudo))
+    app.add_handler(CommandHandler("ban", ban_user))
+    app.add_handler(CommandHandler("unban", unban_user))
+
+    # Callbacks
+    app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
+    app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
+    app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
+
+    # Video upload auto save
+    app.add_handler(MessageHandler(filters.VIDEO & filters.User(sudo_users), auto_upload))
+
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
+
+    print("Bot started...")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
