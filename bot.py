@@ -3,7 +3,7 @@ import json
 import random
 import asyncio
 import zipfile
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 # ---------------- CONFIG ----------------
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Set your bot token as environment variable
 VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
@@ -79,8 +79,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=btn
             )
             return
-    except Exception as e:
-        # Maybe user not found in channel, allow to continue
+    except Exception:
         pass
 
     bot_name = (await context.bot.get_me()).first_name
@@ -158,27 +157,35 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.message.reply_text("✅ You have watched all videos of our server 😅\nRestarting the list for you!")
         user_seen[str(uid)] = []
         save_json(USER_FILE, user_seen)
-        return
+        unseen = videos.copy()
 
-    msg_id = random.choice(unseen)
-    try:
-        await context.bot.copy_message(
-            chat_id=uid,
-            from_chat_id=VAULT_CHANNEL_ID,
-            message_id=msg_id
-        )
-        seen.append(msg_id)
-        user_seen[str(uid)] = seen
-        save_json(USER_FILE, user_seen)
+    random.shuffle(unseen)  # Shuffle so next video is random
 
-        await query.message.reply_text(
-            "Want another? 😈",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]
-            ])
-        )
-    except Exception as e:
-        await query.message.reply_text("⚠️ Video not found or deleted.")
+    for msg_id in unseen:
+        try:
+            await context.bot.copy_message(
+                chat_id=uid,
+                from_chat_id=VAULT_CHANNEL_ID,
+                message_id=msg_id
+            )
+            seen.append(msg_id)
+            user_seen[str(uid)] = seen
+            save_json(USER_FILE, user_seen)
+
+            await query.message.reply_text(
+                "Want another? 😈",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]
+                ])
+            )
+            return
+        except Exception:
+            # Video might be deleted, skip and continue
+            if msg_id in videos:
+                videos.remove(msg_id)
+                save_json(VIDEO_FILE, videos)
+
+    await query.message.reply_text("⚠️ No videos available right now, please try later.")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -195,7 +202,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
             videos.append(sent.message_id)
             save_json(VIDEO_FILE, videos)
             await update.message.reply_text("✅ Video uploaded and saved to vault.")
-        except Exception as e:
+        except Exception:
             await update.message.reply_text("⚠️ Failed to upload.")
 
 # ------------- ADMIN COMMANDS --------------
@@ -364,5 +371,5 @@ app.add_handler(CommandHandler("ban", ban_user))
 app.add_handler(CommandHandler("unban", unban_user))
 app.add_handler(CommandHandler("stats", stats))
 
-print("✅ Bot is running...")
+print("Bot is starting...")
 app.run_polling()
