@@ -5,6 +5,10 @@
     "TELEGRAM_BOT_TOKEN": {
       "description": "Telegram bot token from BotFather",
       "required": true
+    },
+    "MONGO_URI": {
+      "description": "MongoDB connection URI",
+      "required": true
     }
   },
   "scripts": {
