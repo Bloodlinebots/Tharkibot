@@ -1,6 +1,8 @@
 import os
+import json
 import random
 import asyncio
+import zipfile
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     ApplicationBuilder,
@@ -10,12 +12,9 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters
 )
-from pymongo import MongoClient
 
 # ---------------- CONFIG ----------------
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-MONGO_URI = os.getenv("MONGO_URI")  # MongoDB URI environment variable
-
 VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
@@ -24,71 +23,29 @@ DEVELOPER_LINK = "https://t.me/unbornvillian"
 SUPPORT_LINK = "https://t.me/botmine_tech"
 WELCOME_IMAGE = "https://files.catbox.moe/19j4mc.jpg"
 
+VIDEO_FILE = "video_ids.json"
+USER_FILE = "user_seen.json"
+SUDO_FILE = "sudos.json"
+BANNED_FILE = "banned.json"
+
 cooldown_time = 8
 cooldowns = {}
 
-# ---------------- MONGO DB SETUP ----------------
-client = MongoClient(MONGO_URI)
-db = client["bot_database"]
+# ---------------- HELPERS ----------------
+def load_json(file, default):
+    if os.path.exists(file):
+        with open(file, 'r') as f:
+            return json.load(f)
+    return default
 
-videos_col = db["videos"]
-user_seen_col = db["user_seen"]
-sudo_col = db["sudos"]
-banned_col = db["banned"]
+def save_json(file, data):
+    with open(file, 'w') as f:
+        json.dump(data, f, indent=2)
 
-# ---------------- STORAGE HELPERS ----------------
-
-def load_videos():
-    return [doc["message_id"] for doc in videos_col.find({})]
-
-def save_video(msg_id):
-    if not videos_col.find_one({"message_id": msg_id}):
-        videos_col.insert_one({"message_id": msg_id})
-
-def remove_video(msg_id):
-    videos_col.delete_one({"message_id": msg_id})
-
-def load_user_seen():
-    data = {}
-    for doc in user_seen_col.find({}):
-        data[doc["user_id"]] = doc.get("seen_videos", [])
-    return data
-
-def save_user_seen(user_id, seen_list):
-    user_seen_col.update_one(
-        {"user_id": user_id},
-        {"$set": {"seen_videos": seen_list}},
-        upsert=True
-    )
-
-def load_sudos():
-    return [doc["user_id"] for doc in sudo_col.find({})]
-
-def add_sudo(user_id):
-    sudo_col.update_one(
-        {"user_id": user_id},
-        {"$set": {}},
-        upsert=True
-    )
-
-def load_banned():
-    return [doc["user_id"] for doc in banned_col.find({})]
-
-def add_banned(user_id):
-    banned_col.update_one(
-        {"user_id": user_id},
-        {"$set": {}},
-        upsert=True
-    )
-
-def remove_banned(user_id):
-    banned_col.delete_one({"user_id": user_id})
-
-# ---------------- LOAD DATA ON STARTUP ----------------
-videos = load_videos()
-user_seen = load_user_seen()
-sudo_users = load_sudos()
-banned_users = load_banned()
+videos = load_json(VIDEO_FILE, [])
+user_seen = load_json(USER_FILE, {})
+sudo_users = load_json(SUDO_FILE, [])
+banned_users = load_json(BANNED_FILE, [])
 
 # ---------------- DECORATORS ----------------
 def is_admin(uid):
@@ -125,6 +82,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # New feature: send a log message in vault channel when user starts bot
     user = update.effective_user
     log_text = (
         f"📥 New User Started Bot\n\n"
@@ -203,13 +161,13 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         cooldowns[uid] = now + cooldown_time
 
-    seen = user_seen.get(uid, [])
+    seen = user_seen.get(str(uid), [])
     unseen = list(set(videos) - set(seen))
 
     if not unseen:
         await query.message.reply_text("✅ You have watched all videos of our server 😅\nRestarting the list for you!")
-        user_seen[uid] = []
-        save_user_seen(uid, [])
+        user_seen[str(uid)] = []
+        save_json(USER_FILE, user_seen)
         unseen = videos.copy()
 
     random.shuffle(unseen)
@@ -222,8 +180,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 message_id=msg_id
             )
             seen.append(msg_id)
-            user_seen[uid] = seen
-            save_user_seen(uid, seen)
+            user_seen[str(uid)] = seen
+            save_json(USER_FILE, user_seen)
 
             await query.message.reply_text(
                 "Want another? 😈",
@@ -235,7 +193,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             if msg_id in videos:
                 videos.remove(msg_id)
-                remove_video(msg_id)
+                save_json(VIDEO_FILE, videos)
 
     await query.message.reply_text("⚠️ No videos available right now, please try later.")
 
@@ -252,7 +210,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_id=update.message.message_id
             )
             videos.append(sent.message_id)
-            save_video(sent.message_id)
+            save_json(VIDEO_FILE, videos)
             await update.message.reply_text("✅ Video uploaded and saved to vault.")
         except Exception:
             await update.message.reply_text("⚠️ Failed to upload.")
@@ -285,8 +243,17 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are not authorized to use this command.")
         return
 
-    # As now files are stored in MongoDB, you might want to implement DB backup separately.
-    await update.message.reply_text("⚠️ Backup command not supported with MongoDB storage.")
+    files_to_backup = [VIDEO_FILE, USER_FILE, SUDO_FILE, BANNED_FILE]
+    zip_path = "backup.zip"
+    try:
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for f in files_to_backup:
+                if os.path.exists(f):
+                    zipf.write(f, arcname=os.path.basename(f))
+        await context.bot.send_document(chat_id=uid, document=open(zip_path, 'rb'))
+        os.remove(zip_path)
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Backup failed: {e}")
 
 async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -303,7 +270,7 @@ async def delete_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_id = int(args[0])
         if msg_id in videos:
             videos.remove(msg_id)
-            remove_video(msg_id)
+            save_json(VIDEO_FILE, videos)
             await update.message.reply_text(f"✅ Video {msg_id} deleted from vault.")
         else:
             await update.message.reply_text("❌ Video ID not found.")
@@ -325,7 +292,7 @@ async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_sudo = int(args[0])
         if new_sudo not in sudo_users:
             sudo_users.append(new_sudo)
-            add_sudo(new_sudo)
+            save_json(SUDO_FILE, sudo_users)
             await update.message.reply_text(f"✅ User {new_sudo} added as sudo.")
         else:
             await update.message.reply_text("User already sudo.")
@@ -347,7 +314,7 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_to_ban = int(args[0])
         if user_to_ban not in banned_users:
             banned_users.append(user_to_ban)
-            add_banned(user_to_ban)
+            save_json(BANNED_FILE, banned_users)
             await update.message.reply_text(f"🚫 User {user_to_ban} banned.")
         else:
             await update.message.reply_text("User already banned.")
@@ -369,7 +336,7 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_to_unban = int(args[0])
         if user_to_unban in banned_users:
             banned_users.remove(user_to_unban)
-            remove_banned(user_to_unban)
+            save_json(BANNED_FILE, banned_users)
             await update.message.reply_text(f"✅ User {user_to_unban} unbanned.")
         else:
             await update.message.reply_text("User not banned.")
@@ -394,28 +361,24 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Sudo Users: {total_sudos}\n"
         f"Banned Users: {total_banned}"
     )
+
     await update.message.reply_text(text)
 
 # ---------------- MAIN ----------------
+app = ApplicationBuilder().token(TOKEN).build()
 
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
+app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
+app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
-    app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
-    app.add_handler(MessageHandler(filters.VIDEO & filters.User(user_id=sudo_users), auto_upload))
+app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CommandHandler("backup", backup))
+app.add_handler(CommandHandler("deletevideo", delete_video))
+app.add_handler(CommandHandler("addsudo", add_sudo))
+app.add_handler(CommandHandler("ban", ban_user))
+app.add_handler(CommandHandler("unban", unban_user))
+app.add_handler(CommandHandler("stats", stats))
 
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("backup", backup))
-    app.add_handler(CommandHandler("deletevideo", delete_video))
-    app.add_handler(CommandHandler("addsudo", add_sudo))
-    app.add_handler(CommandHandler("ban", ban_user))
-    app.add_handler(CommandHandler("unban", unban_user))
-    app.add_handler(CommandHandler("stats", stats))
-
-    print("Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+print("Bot is starting...")
+app.run_polling()
