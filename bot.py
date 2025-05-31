@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 # ---------------- CONFIG ----------------
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Set your bot token as environment variable
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
@@ -82,13 +82,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+    # New feature: send a log message in vault channel when user starts bot
+    user = update.effective_user
+    log_text = (
+        f"📥 New User Started Bot\n\n"
+        f"👤 Name: {user.full_name}\n"
+        f"🆔 ID: {user.id}\n"
+        f"📛 Username: @{user.username if user.username else 'N/A'}"
+    )
+    await context.bot.send_message(chat_id=VAULT_CHANNEL_ID, text=log_text)
+
     bot_name = (await context.bot.get_me()).first_name
     caption = (
         f"🥵 Welcome to {bot_name}!\n"
         "Here you will access the most unseen videos.\n👇 Tap below to explore:"
     )
 
-    # Welcome photo WITHOUT Disclaimer button
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
         caption=caption,
@@ -99,7 +108,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     )
 
-    # Separate Disclaimer message with Terms link
     disclaimer_text = (
         "⚠️ **Disclaimer** ⚠️\n\n"
         "We do NOT produce or spread adult content.\n"
@@ -162,7 +170,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         save_json(USER_FILE, user_seen)
         unseen = videos.copy()
 
-    random.shuffle(unseen)  # Shuffle so next video is random
+    random.shuffle(unseen)
 
     for msg_id in unseen:
         try:
@@ -183,7 +191,6 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             return
         except Exception:
-            # Video might be deleted, skip and continue
             if msg_id in videos:
                 videos.remove(msg_id)
                 save_json(VIDEO_FILE, videos)
