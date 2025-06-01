@@ -205,9 +205,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 chat_id=uid,
                 from_chat_id=VAULT_CHANNEL_ID,
                 message_id=msg_id,
-                protect_content=True,  # Disable forward/save
+                protect_content=True,
             )
-            # Auto delete after 3 hours
             threading.Thread(
                 target=delete_after_delay,
                 args=(context.bot, uid, sent.message_id, 10800),
@@ -229,7 +228,6 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             return
         except Exception:
-            # If message not found in vault, remove from videos
             if msg_id in videos:
                 videos.remove(msg_id)
                 save_json(VIDEO_FILE, videos)
@@ -278,7 +276,6 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("If you need any help, contact the developer.")
-
 
 # -------------- ADMIN COMMANDS ----------------
 
@@ -434,8 +431,8 @@ async def main():
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_start"))
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
 
-    # Video upload (only sudo)
-    app.add_handler(MessageHandler(filters.VIDEO & filters.USER(sudo_users), auto_upload))
+    # ✅ FIXED: This line
+    app.add_handler(MessageHandler(filters.VIDEO & filters.User(user_id=sudo_users), auto_upload))
 
     print("Bot started...")
     await app.run_polling()
