@@ -315,7 +315,7 @@ async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("Invalid user ID.")
 
-def main():
+async def run_bot():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -328,4 +328,7 @@ def main():
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-    app.run_polling()
+    await app.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(run_bot())
