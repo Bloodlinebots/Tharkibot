@@ -229,7 +229,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             sent = await context.bot.copy_message(
                 chat_id=VAULT_CHANNEL_ID,
-                from_chat_id=update.message.chat_id,
+                from_chat_id=update.message.chat.id,  # fixed here
                 message_id=update.message.message_id,
             )
             add_video(sent.message_id)
@@ -328,7 +328,7 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-    if __name__ == "__main__":
+if __name__ == "__main__":
     import asyncio
 
     try:
