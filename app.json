@@ -1,9 +1,13 @@
 {
   "name": "TharkiHubBot",
-  "description": "Telegram bot with force join and random video forwarding",
+  "description": "Telegram bot with force join and random video forwarding (MongoDB powered)",
   "env": {
     "TELEGRAM_BOT_TOKEN": {
       "description": "Telegram bot token from BotFather",
+      "required": true
+    },
+    "MONGODB_URI": {
+      "description": "Your MongoDB connection string from MongoDB Atlas",
       "required": true
     }
   },
