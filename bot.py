@@ -329,7 +329,12 @@ async def run_bot():
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
     await app.run_polling()
-
 if __name__ == "__main__":
+    import asyncio
+
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_bot())
+
+    try:
+        loop.run_until_complete(run_bot())
+    except (KeyboardInterrupt, SystemExit):
+        print("Bot stopped!")
