@@ -330,6 +330,4 @@ async def run_bot():
 
 if __name__ == "__main__":
     import asyncio
-    from bot import run  # or your main function
-
-    asyncio.run(run())
+    asyncio.run(run_bot())
