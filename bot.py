@@ -330,8 +330,6 @@ async def run_bot():
 
 if __name__ == "__main__":
     import asyncio
+    from bot import run  # or your main function
 
-    try:
-        asyncio.run(run_bot())
-    except (KeyboardInterrupt, SystemExit):
-        print("Bot stopped!")
+    asyncio.run(run())
