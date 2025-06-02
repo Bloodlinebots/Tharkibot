@@ -437,11 +437,14 @@ async def main():
     print("Bot started...")
     await app.run_polling()
 
+import asyncio
+
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-    import asyncio
     try:
-        asyncio.get_event_loop().run_until_complete(main())
-    except (KeyboardInterrupt, SystemExit):
-        print("Bot stopped.")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    except RuntimeError as e:
+        # If the event loop is already running (e.g., on Heroku), use nest_asyncio
+        import nest_asyncio
+        nest_asyncio.apply()
+        asyncio.run(main())
