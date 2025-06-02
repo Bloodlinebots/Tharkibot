@@ -439,6 +439,8 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
+    asyncio.run(main()):
+    import asyncio
     try:
         asyncio.get_event_loop().run_until_complete(main())
     except (KeyboardInterrupt, SystemExit):
