@@ -14,8 +14,7 @@ from telegram.ext import (
     filters,
 )
 
-# -------------- CONFIGURATION ----------------
-
+# --------- CONFIG ------------
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
@@ -30,9 +29,9 @@ USER_FILE = "user_seen.json"
 SUDO_FILE = "sudos.json"
 BANNED_FILE = "banned.json"
 
-COOLDOWN = 8  # seconds cooldown
+COOLDOWN = 8
 
-# -------------- HELPERS -----------------
+# --------- HELPERS ------------
 
 def load_json(file, default):
     if os.path.exists(file):
@@ -60,7 +59,6 @@ def is_sudo(uid):
 def is_banned(uid):
     return uid in banned_users
 
-# Auto delete after delay (in seconds)
 def delete_after_delay(bot, chat_id, message_id, delay):
     import time
     time.sleep(delay)
@@ -69,7 +67,7 @@ def delete_after_delay(bot, chat_id, message_id, delay):
     except Exception:
         pass
 
-# -------------- HANDLERS ----------------
+# --------- HANDLERS -----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -78,7 +76,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are banned from using this bot.")
         return
 
-    # Force join check
     try:
         member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", uid)
         if member.status in ["left", "kicked"]:
@@ -239,6 +236,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    # Changed here: BOTH sudo users AND main admin can upload
     if not is_sudo(uid):
         return
 
@@ -277,7 +275,7 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("If you need any help, contact the developer.")
 
-# -------------- ADMIN COMMANDS ----------------
+# --------- ADMIN COMMANDS -----------
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -361,90 +359,29 @@ async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_json(SUDO_FILE, sudo_users)
             await update.message.reply_text(f"✅ Removed {rem_sudo} from sudo.")
         else:
-            await update.message.reply_text("User not in sudo list.")
+            await update.message.reply_text("User is not a sudo.")
     except ValueError:
         await update.message.reply_text("Invalid user ID.")
 
 
-async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_sudo(uid):
-        await update.message.reply_text("🚫 Unauthorized.")
-        return
-
-    if len(context.args) != 1:
-        await update.message.reply_text("Usage: /ban <user_id>")
-        return
-
-    try:
-        ban_id = int(context.args[0])
-        if ban_id not in banned_users:
-            banned_users.append(ban_id)
-            save_json(BANNED_FILE, banned_users)
-            await update.message.reply_text(f"🚫 User {ban_id} banned.")
-        else:
-            await update.message.reply_text("User already banned.")
-    except ValueError:
-        await update.message.reply_text("Invalid user ID.")
-
-
-async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_sudo(uid):
-        await update.message.reply_text("🚫 Unauthorized.")
-        return
-
-    if len(context.args) != 1:
-        await update.message.reply_text("Usage: /unban <user_id>")
-        return
-
-    try:
-        unban_id = int(context.args[0])
-        if unban_id in banned_users:
-            banned_users.remove(unban_id)
-            save_json(BANNED_FILE, banned_users)
-            await update.message.reply_text(f"✅ User {unban_id} unbanned.")
-        else:
-            await update.message.reply_text("User not banned.")
-    except ValueError:
-        await update.message.reply_text("Invalid user ID.")
-
-# -------------- MAIN -----------------
-
-async def main():
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
+    app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_to_start"))
+    app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(CommandHandler("privacy", privacy_command))
-
-    # Admin commands
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("backup", backup))
     app.add_handler(CommandHandler("addsudo", add_sudo))
     app.add_handler(CommandHandler("remsudo", remove_sudo))
-    app.add_handler(CommandHandler("ban", ban_user))
-    app.add_handler(CommandHandler("unban", unban_user))
 
-    # Callback queries
-    app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
-    app.add_handler(CallbackQueryHandler(back_to_start, pattern="back_start"))
-    app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
+    # Only allow video uploads from sudo or admin
+    app.add_handler(MessageHandler(filters.VIDEO & filters.User(sudo_users + [ADMIN_USER_ID]), auto_upload))
 
-    # ✅ FIXED: This line
-    app.add_handler(MessageHandler(filters.VIDEO & filters.User(user_id=sudo_users), auto_upload))
-
-    print("Bot started...")
-    await app.run_polling()
-
-import asyncio
+    app.run_polling()
 
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
-    except RuntimeError as e:
-        # If the event loop is already running (e.g., on Heroku), use nest_asyncio
-        import nest_asyncio
-        nest_asyncio.apply()
-        asyncio.run(main())
+    main()
