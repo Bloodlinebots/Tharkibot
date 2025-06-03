@@ -328,6 +328,8 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
+         await app.run_polling()
+
 if __name__ == "__main__":
     import asyncio
     asyncio.run(run_bot())
