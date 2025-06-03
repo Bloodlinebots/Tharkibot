@@ -4,6 +4,7 @@ import random
 import threading
 import asyncio
 import zipfile
+import tempfile
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,6 +16,7 @@ from telegram.ext import (
 )
 
 # --------- CONFIG ------------
+
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 VAULT_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
@@ -33,6 +35,8 @@ COOLDOWN = 8
 
 # --------- HELPERS ------------
 
+file_lock = threading.Lock()
+
 def load_json(file, default):
     if os.path.exists(file):
         with open(file, "r") as f:
@@ -40,8 +44,12 @@ def load_json(file, default):
     return default
 
 def save_json(file, data):
-    with open(file, "w") as f:
-        json.dump(data, f, indent=2)
+    with file_lock:
+        dir_name = os.path.dirname(file) or "."
+        with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False) as tf:
+            json.dump(data, tf, indent=2)
+            tempname = tf.name
+        os.replace(tempname, file)
 
 videos = load_json(VIDEO_FILE, [])
 user_seen = load_json(USER_FILE, {})
@@ -137,7 +145,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=uid, text=disclaimer_text, reply_markup=buttons, parse_mode="Markdown"
     )
 
-
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -159,7 +166,6 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ),
     )
-
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -229,14 +235,10 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 videos.remove(msg_id)
                 save_json(VIDEO_FILE, videos)
 
-    await query.message.reply_text(
-        "⚠️ No videos available right now, please try later."
-    )
-
+    await query.message.reply_text("⚠️ No videos available right now, please try later.")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    # Changed here: BOTH sudo users AND main admin can upload
     if not is_sudo(uid):
         return
 
@@ -253,13 +255,11 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await update.message.reply_text("⚠️ Failed to upload.")
 
-
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(
         "/privacy - Use this to see bot's Terms and Conditions"
     )
-
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -270,7 +270,6 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception:
         await update.message.reply_text("⚠️ Failed to fetch privacy message.")
-
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("If you need any help, contact the developer.")
@@ -300,7 +299,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"📣 Broadcast sent to {count} users.")
 
-
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_sudo(uid):
@@ -318,7 +316,6 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(zip_path)
     except Exception as e:
         await update.message.reply_text(f"⚠️ Backup failed: {e}")
-
 
 async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -341,7 +338,6 @@ async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("Invalid user ID.")
 
-
 async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin(uid):
@@ -363,6 +359,7 @@ async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("Invalid user ID.")
 
+# --------- MAIN -----------
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -378,7 +375,6 @@ def main():
     app.add_handler(CommandHandler("addsudo", add_sudo))
     app.add_handler(CommandHandler("remsudo", remove_sudo))
 
-    # Only allow video uploads from sudo or admin
     app.add_handler(MessageHandler(filters.VIDEO & filters.User(sudo_users + [ADMIN_USER_ID]), auto_upload))
 
     app.run_polling()
