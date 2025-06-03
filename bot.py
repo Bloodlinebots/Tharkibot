@@ -1,7 +1,8 @@
 import os
 import json
 import time
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatAction, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram.constants import ChatAction
 from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
                           filters, CallbackContext, CallbackQueryHandler, ContextTypes)
 from telegram.constants import ChatType
