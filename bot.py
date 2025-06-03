@@ -3,6 +3,7 @@ import random
 import threading
 import asyncio
 import zipfile
+import time
 from pymongo import MongoClient
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
@@ -85,11 +86,13 @@ def is_admin(uid):
 def is_sudo(uid):
     return uid in get_sudo_users() or is_admin(uid)
 
-def delete_after_delay(bot, chat_id, message_id, delay):
-    import time
+def delete_after_delay(bot, chat_id, message_id, delay, loop):
     time.sleep(delay)
     try:
-        asyncio.run(bot.delete_message(chat_id=chat_id, message_id=message_id))
+        asyncio.run_coroutine_threadsafe(
+            bot.delete_message(chat_id=chat_id, message_id=message_id),
+            loop
+        )
     except Exception:
         pass
 
@@ -200,7 +203,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             threading.Thread(
                 target=delete_after_delay,
-                args=(context.bot, uid, sent.message_id, 10800),
+                args=(context.bot, uid, sent.message_id, 10800, asyncio.get_running_loop()),
                 daemon=True,
             ).start()
 
@@ -229,7 +232,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             sent = await context.bot.copy_message(
                 chat_id=VAULT_CHANNEL_ID,
-                from_chat_id=update.message.chat.id,  # fixed here
+                from_chat_id=update.message.chat.id,
                 message_id=update.message.message_id,
             )
             add_video(sent.message_id)
@@ -328,8 +331,7 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-         await app.run_polling()
+    await app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(run_bot())
