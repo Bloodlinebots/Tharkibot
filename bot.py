@@ -19,6 +19,9 @@ from telegram.ext import (
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_URI = os.getenv("MONGODB_URI")
 
+if not TOKEN or not MONGO_URI:
+    raise EnvironmentError("❌ Missing TELEGRAM_BOT_TOKEN or MONGODB_URI in environment variables.")
+
 client = MongoClient(MONGO_URI)
 db = client["telegram_bot"]
 videos_col = db["videos"]
@@ -49,7 +52,7 @@ def remove_video(msg_id):
 
 def get_user_seen(uid):
     data = user_seen_col.find_one({"_id": str(uid)})
-    return data["seen"] if data else []
+    return data["seen"] if data and "seen" in data else []
 
 def set_user_seen(uid, seen):
     user_seen_col.update_one({"_id": str(uid)}, {"$set": {"seen": seen}}, upsert=True)
@@ -203,7 +206,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             threading.Thread(
                 target=delete_after_delay,
-                args=(context.bot, uid, sent.message_id, 10800, asyncio.get_running_loop()),
+                args=(context.bot, uid, sent.message_id, 10800, context.application.loop),
                 daemon=True,
             ).start()
 
