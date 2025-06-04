@@ -4,12 +4,8 @@ import threading
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes,
+    MessageHandler, filters
 )
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -46,10 +42,6 @@ async def get_user_data(uid):
 async def save_user_data(data):
     await db.users.replace_one({"_id": data["_id"]}, data, upsert=True)
 
-async def get_all_videos():
-    videos = await db.videos.find().to_list(None)
-    return [v["msg_id"] for v in videos]
-
 async def add_video(msg_id):
     await db.videos.update_one({"msg_id": msg_id}, {"$set": {"msg_id": msg_id}}, upsert=True)
 
@@ -64,20 +56,19 @@ async def delete_after_delay(bot, chat_id, message_id, delay):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-
     banned = await db.banned.find_one({"_id": uid})
     if banned:
-        await update.message.reply_text("🚫 You are banned from using this bot.")
+        await update.message.reply_text("🛑 You are banned from using this bot.")
         return
 
     try:
         member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", uid)
         if member.status in ["left", "kicked"]:
-            btn = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")]]
-            )
+            btn = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")]
+            ])
             await update.message.reply_text(
-                "🚫 You must join our channel to use this bot.\n\n"
+                "🛑 You must join our channel to use this bot.\n\n"
                 "⚠️ If you leave, you will be restricted.\n\n"
                 "✅ After joining, use /start",
                 reply_markup=btn,
@@ -104,16 +95,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
         caption=caption,
-        reply_markup=InlineKeyboardMarkup(
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
             [
-                [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-                [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-                [
-                    InlineKeyboardButton("Support", url=SUPPORT_LINK),
-                    InlineKeyboardButton("Help", callback_data="show_privacy_info"),
-                ],
-            ]
-        ),
+                InlineKeyboardButton("Support", url=SUPPORT_LINK),
+                InlineKeyboardButton("Help", callback_data="show_privacy_info"),
+            ],
+        ]),
     )
 
     disclaimer_text = (
@@ -140,16 +129,14 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await query.edit_message_media(
         media=InputMediaPhoto(WELCOME_IMAGE, caption=caption),
-        reply_markup=InlineKeyboardMarkup(
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
             [
-                [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-                [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-                [
-                    InlineKeyboardButton("Support", url=SUPPORT_LINK),
-                    InlineKeyboardButton("Help", callback_data="show_privacy_info"),
-                ],
-            ]
-        ),
+                InlineKeyboardButton("Support", url=SUPPORT_LINK),
+                InlineKeyboardButton("Help", callback_data="show_privacy_info"),
+            ],
+        ]),
     )
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -157,9 +144,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     uid = query.from_user.id
     await query.answer()
 
-    banned = await db.banned.find_one({"_id": uid})
-    if banned:
-        await query.message.reply_text("🚫 You are banned from using this bot.")
+    if await db.banned.find_one({"_id": uid}):
+        await query.message.reply_text("🛑 You are banned from using this bot.")
         return
 
     now = asyncio.get_event_loop().time()
@@ -171,51 +157,53 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         cooldowns[uid] = now + COOLDOWN
 
     user_data = await get_user_data(uid)
-    videos = await get_all_videos()
-    seen = user_data.get("seen", [])
-    unseen = list(set(videos) - set(seen))
+    seen = set(user_data.get("seen", []))
 
-    if not unseen:
+    video_doc = await db.videos.aggregate([
+        {"$match": {"msg_id": {"$nin": list(seen)}}},
+        {"$sample": {"size": 1}}
+    ]).to_list(1)
+
+    if not video_doc:
         if not user_data.get("msg_sent", False):
-            await query.message.reply_text("✅ You have watched all videos on our server 😅\nRestarting the list for you!")
+            await query.message.reply_text("✅ You've watched all videos! Restarting your list 😅")
             user_data["msg_sent"] = True
         user_data["seen"] = []
         await save_user_data(user_data)
-        unseen = videos.copy()
+        return await callback_get_video(update, context)
 
-    random.shuffle(unseen)
+    msg_id = video_doc[0]["msg_id"]
 
-    for msg_id in unseen:
-        try:
-            sent = await context.bot.copy_message(
-                chat_id=uid,
-                from_chat_id=VAULT_CHANNEL_ID,
-                message_id=msg_id,
-                protect_content=True,
-            )
-            threading.Thread(
-                target=asyncio.run,
-                args=(delete_after_delay(context.bot, uid, sent.message_id, 10800),),
-                daemon=True,
-            ).start()
+    try:
+        sent = await context.bot.copy_message(
+            chat_id=uid,
+            from_chat_id=VAULT_CHANNEL_ID,
+            message_id=msg_id,
+            protect_content=True,
+        )
 
-            user_data["seen"].append(msg_id)
-            user_data["msg_sent"] = False
-            await save_user_data(user_data)
+        threading.Thread(
+            target=asyncio.run,
+            args=(delete_after_delay(context.bot, uid, sent.message_id, 10800),),
+            daemon=True,
+        ).start()
 
-            total_videos = len(videos)
-            watched = len(user_data["seen"])
-            await query.message.reply_text(
-                f"🎬 Video {watched}/{total_videos} watched.\nWant another? 😈",
-                reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]]
-                ),
-            )
-            return
-        except Exception:
-            await db.videos.delete_one({"msg_id": msg_id})
+        user_data["seen"].append(msg_id)
+        user_data["msg_sent"] = False
+        await save_user_data(user_data)
 
-    await query.message.reply_text("⚠️ No videos available right now, please try later.")
+        total_videos = await db.videos.count_documents({})
+        watched = len(user_data["seen"])
+        await query.message.reply_text(
+            f"🎬 Video {watched}/{total_videos} watched.\nWant another? 😈",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]]
+            ),
+        )
+    except Exception:
+        await db.videos.delete_one({"msg_id": msg_id})
+        await query.message.reply_text("⚠️ That video was broken. Trying another...")
+        await callback_get_video(update, context)
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -282,7 +270,7 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         target_id = int(context.args[0])
         await db.banned.update_one({"_id": target_id}, {"$set": {"_id": target_id}}, upsert=True)
-        await update.message.reply_text(f"🚫 User {target_id} banned.")
+        await update.message.reply_text(f"🛑 User {target_id} banned.")
     except:
         await update.message.reply_text("⚠️ Usage: /ban 123456789")
 
@@ -335,7 +323,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 **Bot Statistics**\n\n"
         f"👥 Total Users: `{total_users}`\n"
         f"🎞 Total Videos: `{total_videos}`\n"
-        f"🚫 Banned Users: `{total_banned}`\n"
+        f"🛑 Banned Users: `{total_banned}`\n"
         f"🛡 Sudo Users: `{total_sudos}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
