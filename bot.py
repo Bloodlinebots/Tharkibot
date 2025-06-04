@@ -19,7 +19,7 @@ client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
 
 VAULT_CHANNEL_ID = -1002564608005   # Videos only
-LOG_CHANNEL_ID = -1001234567890     # New users, bans, errors, etc
+LOG_CHANNEL_ID = -1002624785490     # New users, bans, errors, etc
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
