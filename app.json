@@ -11,10 +11,6 @@
     "MONGO_URI": {
       "description": "MongoDB connection URI (use MongoDB Atlas or other host)",
       "required": true
-    },
-    "ADMIN_USER_ID": {
-      "description": "Your Telegram user ID",
-      "required": true
     }
   },
   "buildpacks": [
