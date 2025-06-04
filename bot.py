@@ -3,12 +3,13 @@ import asyncio
 import threading
 import random
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+    Update, InlineKeyboardButton, InlineKeyboardMarkup
 )
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
     MessageHandler, ContextTypes, filters
 )
+from telegram.error import BadRequest, TelegramError
 from motor.motor_asyncio import AsyncIOMotorClient
 
 # ---------- CONFIG ----------
@@ -157,11 +158,19 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [[InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]]
             ),
         )
-    except:
-        await db.videos.delete_one({"msg_id": msg_id})
-        await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Deleted broken video: `{msg_id}`", parse_mode="Markdown")
-        await query.message.reply_text("⚠️ That video was broken. Trying another...")
-        await callback_get_video(update, context)
+    except BadRequest as e:
+        if "MESSAGE_ID_INVALID" in str(e):
+            await db.videos.delete_one({"msg_id": msg_id})
+            await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Deleted broken video: `{msg_id}`", parse_mode="Markdown")
+            await query.message.reply_text("⚠️ That video was broken. Trying another...")
+            await asyncio.sleep(1)
+            await callback_get_video(update, context)
+        else:
+            await query.message.reply_text(f"⚠️ Telegram error: {e}")
+    except TelegramError as e:
+        await query.message.reply_text(f"⚠️ Telegram error occurred: {e}")
+    except Exception as e:
+        await query.message.reply_text(f"⚠️ Unknown error occurred: {e}")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
