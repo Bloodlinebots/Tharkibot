@@ -18,7 +18,8 @@ MONGO_URI = os.getenv("MONGO_URI") or "mongodb://localhost:27017"
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
 
-VAULT_CHANNEL_ID = -1002624785490
+VAULT_CHANNEL_ID = -1002564608005   # Videos only
+LOG_CHANNEL_ID = -1001234567890     # New users, bans, errors, etc
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
@@ -77,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 ID: {user.id}\n"
         f"📛 Username: @{user.username or 'N/A'}"
     )
-    await context.bot.send_message(VAULT_CHANNEL_ID, log_text)
+    await context.bot.send_message(LOG_CHANNEL_ID, log_text)
 
     bot_name = (await context.bot.get_me()).first_name
     caption = (
@@ -158,6 +159,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     except:
         await db.videos.delete_one({"msg_id": msg_id})
+        await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Deleted broken video: `{msg_id}`", parse_mode="Markdown")
         await query.message.reply_text("⚠️ That video was broken. Trying another...")
         await callback_get_video(update, context)
 
@@ -226,6 +228,7 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target = int(context.args[0])
         await db.banned.update_one({"_id": target}, {"$set": {"_id": target}}, upsert=True)
         await update.message.reply_text(f"🛑 User {target} banned.")
+        await context.bot.send_message(LOG_CHANNEL_ID, f"🚫 Banned user `{target}`", parse_mode="Markdown")
     except:
         await update.message.reply_text("⚠️ Usage: /ban 123456789")
 
@@ -237,6 +240,7 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target = int(context.args[0])
         await db.banned.delete_one({"_id": target})
         await update.message.reply_text(f"✅ User {target} unbanned.")
+        await context.bot.send_message(LOG_CHANNEL_ID, f"✅ Unbanned user `{target}`", parse_mode="Markdown")
     except:
         await update.message.reply_text("⚠️ Usage: /unban 123456789")
 
@@ -267,12 +271,14 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     v_count = await db.videos.count_documents({})
     s_count = await db.sudos.count_documents({})
     b_count = await db.banned.count_documents({})
+    u_count = await db.users.count_documents({})
 
     text = (
         "📊 **Bot Statistics**\n\n"
         f"🎞 Total Videos: `{v_count}`\n"
         f"🛡 Sudo Users: `{s_count}`\n"
-        f"🚫 Banned Users: `{b_count}`"
+        f"🚫 Banned Users: `{b_count}`\n"
+        f"👥 Total Users: `{u_count}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
