@@ -1,6 +1,5 @@
 import os
 import asyncio
-import threading
 import random
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -19,8 +18,8 @@ MONGO_URI = os.getenv("MONGO_URI") or "mongodb://localhost:27017"
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
 
-VAULT_CHANNEL_ID = -1002564608005   # Videos only
-LOG_CHANNEL_ID = -1002624785490     # New users, bans, errors, etc
+VAULT_CHANNEL_ID = -1002564608005
+LOG_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNEL = "bot_backup"
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
@@ -71,6 +70,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     except:
         pass
+
+    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
 
     user = update.effective_user
     log_text = (
@@ -146,11 +147,10 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
             protect_content=True,
         )
 
-        threading.Thread(
-            target=asyncio.run,
-            args=(delete_after_delay(context.bot, uid, sent.message_id, 10800),),
-            daemon=True,
-        ).start()
+        # Use create_task instead of threading
+        context.application.create_task(
+            delete_after_delay(context.bot, uid, sent.message_id, 10800)
+        )
 
         await query.message.reply_text(
             f"😈 Want another?",
