@@ -1,19 +1,20 @@
 {
-  "name": "TharkiHubBot",
-  "description": "Telegram bot with force join and random video forwarding",
+  "name": "Telegram Video Vault Bot",
+  "description": "Telegram bot that shares videos with MongoDB",
+  "repository": "https://github.com/yourusername/your-repo-name",
+  "keywords": ["telegram", "bot", "mongo", "video"],
   "env": {
     "TELEGRAM_BOT_TOKEN": {
-      "description": "Telegram bot token from BotFather",
+      "description": "Your bot's API token from @BotFather",
       "required": true
-    }
-  },
-  "scripts": {
-    "start": "python bot.py"
-  },
-  "formation": {
-    "worker": {
-      "quantity": 1,
-      "size": "standard-1x"
+    },
+    "MONGO_URI": {
+      "description": "MongoDB connection URI (use MongoDB Atlas or other host)",
+      "required": true
+    },
+    "ADMIN_USER_ID": {
+      "description": "Your Telegram user ID",
+      "required": true
     }
   },
   "buildpacks": [
