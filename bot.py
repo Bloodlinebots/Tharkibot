@@ -38,14 +38,32 @@ COOLDOWN = 8
 file_lock = threading.Lock()
 
 def load_json(file, default):
-    if os.path.exists(file):
-        with open(file, "r") as f:
-            return json.load(f)
-    return default
+    with file_lock:
+        if os.path.exists(file):
+            try:
+                with open(file, "r") as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                backup_file = file + ".bak"
+                if os.path.exists(backup_file):
+                    try:
+                        with open(backup_file, "r") as bf:
+                            return json.load(bf)
+                    except json.JSONDecodeError:
+                        return default
+                return default
+        return default
 
 def save_json(file, data):
     with file_lock:
         dir_name = os.path.dirname(file) or "."
+        backup_file = file + ".bak"
+        try:
+            if os.path.exists(file):
+                os.replace(file, backup_file)
+        except Exception:
+            pass
+
         with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False) as tf:
             json.dump(data, tf, indent=2)
             tempname = tf.name
@@ -58,14 +76,9 @@ banned_users = load_json(BANNED_FILE, [])
 
 cooldowns = {}
 
-def is_admin(uid):
-    return uid == ADMIN_USER_ID
-
-def is_sudo(uid):
-    return uid in sudo_users or is_admin(uid)
-
-def is_banned(uid):
-    return uid in banned_users
+def is_admin(uid): return uid == ADMIN_USER_ID
+def is_sudo(uid): return uid in sudo_users or is_admin(uid)
+def is_banned(uid): return uid in banned_users
 
 def delete_after_delay(bot, chat_id, message_id, delay):
     import time
@@ -180,9 +193,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(uid):
         if uid in cooldowns and cooldowns[uid] > now:
             wait = int(cooldowns[uid] - now)
-            await query.message.reply_text(
-                f"⏳ Please wait {wait} seconds before getting another video."
-            )
+            await query.message.reply_text(f"⏳ Please wait {wait} seconds before getting another video.")
             return
         cooldowns[uid] = now + COOLDOWN
 
@@ -257,9 +268,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.message.reply_text(
-        "/privacy - Use this to see bot's Terms and Conditions"
-    )
+    await update.callback_query.message.reply_text("/privacy - Use this to see bot's Terms and Conditions")
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
