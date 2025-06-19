@@ -1,7 +1,5 @@
 import os
 import asyncio
-import aioredlock
-import redis.asyncio as redis
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
@@ -13,7 +11,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # ----- CONFIG -----
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-REDIS_URI = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
@@ -23,33 +20,32 @@ DEVELOPER_LINK = "https://t.me/unbornvillian"
 SUPPORT_LINK = "https://t.me/botmine_tech"
 TERMS_LINK = "https://t.me/bot_backup/7"
 WELCOME_IMAGE = "https://files.catbox.moe/19j4mc.jpg"
-COOLDOWN = 5
 
 # ----- INIT -----
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
-redis_client = redis.from_url(REDIS_URI)
-dlm = aioredlock.Aioredlock([redis_client])
-cooldowns = {}
 
 # ----- HELPERS -----
 def is_admin(uid): return uid == ADMIN_USER_ID
-def is_sudo(uid, sudo_list): return uid in sudo_list or is_admin(uid)
+async def is_sudo(uid):
+    sudo_list = [s["_id"] async for s in db.sudos.find()]
+    return uid in sudo_list or is_admin(uid)
 
-async def add_video(msg_id):
-    lock = await dlm.lock(f"lock:video:{msg_id}")
-    try:
-        await db.videos.update_one({"msg_id": msg_id}, {"$set": {"msg_id": msg_id}}, upsert=True)
-    finally:
-        await dlm.unlock(lock)
+async def add_video(msg_id, unique_id=None):
+    data = {"msg_id": msg_id}
+    if unique_id:
+        data["unique_id"] = unique_id
+    await db.videos.update_one({"msg_id": msg_id}, {"$set": data}, upsert=True)
 
 async def delete_after_delay(bot, chat_id, message_id, delay):
     await asyncio.sleep(delay)
     try:
         await bot.delete_message(chat_id, message_id)
-    except: pass
+    except:
+        pass
 
 # ----- HANDLERS -----
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if await db.banned.find_one({"_id": uid}):
@@ -116,64 +112,70 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if await db.banned.find_one({"_id": uid}):
         return await query.message.reply_text("🛑 You are banned from using this bot.")
 
-    now = asyncio.get_event_loop().time()
-    if not is_admin(uid):
-        if uid in cooldowns and cooldowns[uid] > now:
-            wait = int(cooldowns[uid] - now)
-            return await query.message.reply_text(f"⏳ Wait {wait}s before next video.")
-        cooldowns[uid] = now + COOLDOWN
+    user_videos_doc = await db.user_videos.find_one({"_id": uid})
+    seen = user_videos_doc.get("seen", []) if user_videos_doc else []
 
-    seen = (await db.user_videos.find_one({"_id": uid}) or {}).get("seen", [])
-    video_doc = await db.videos.aggregate([
+    video_docs = await db.videos.aggregate([
         {"$match": {"msg_id": {"$nin": seen}}},
-        {"$sample": {"size": 1}}
-    ]).to_list(1)
+        {"$sample": {"size": 4}}
+    ]).to_list(4)
 
-    if not video_doc:
+    if not video_docs:
         return await query.message.reply_text("📭 No more unseen videos. Please wait for more uploads.")
 
-    msg_id = video_doc[0]["msg_id"]
-    try:
-        sent = await context.bot.copy_message(
-            chat_id=uid,
-            from_chat_id=VAULT_CHANNEL_ID,
-            message_id=msg_id,
-            protect_content=True,
-        )
-        await db.user_videos.update_one(
-            {"_id": uid},
-            {"$addToSet": {"seen": msg_id}},
-            upsert=True
-        )
-        context.application.create_task(delete_after_delay(context.bot, uid, sent.message_id, 10800))
+    for video in video_docs:
+        msg_id = video["msg_id"]
+        try:
+            sent = await context.bot.copy_message(
+                chat_id=uid,
+                from_chat_id=VAULT_CHANNEL_ID,
+                message_id=msg_id,
+                protect_content=True,
+            )
+            await db.user_videos.update_one(
+                {"_id": uid},
+                {"$addToSet": {"seen": msg_id}},
+                upsert=True
+            )
+            context.application.create_task(delete_after_delay(context.bot, uid, sent.message_id, 10800))
+        except BadRequest as e:
+            if "MESSAGE_ID_INVALID" in str(e):
+                await db.videos.delete_one({"msg_id": msg_id})
+                await db.user_videos.update_many({}, {"$pull": {"seen": msg_id}})
+                await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Removed broken video `{msg_id}`", parse_mode="Markdown")
+                return await callback_get_video(update, context)
+            else:
+                await query.message.reply_text(f"⚠️ Error: {e}")
+                return
+        except TelegramError as e:
+            await query.message.reply_text(f"⚠️ Telegram error: {e}")
+            return
+        except Exception as e:
+            await query.message.reply_text(f"⚠️ Unknown error: {e}")
+            return
 
-        await query.message.reply_text(
-            "😈 Want another?",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📥 Get Another Video", callback_data="get_video")]
-            ])
-        )
-    except BadRequest as e:
-        if "MESSAGE_ID_INVALID" in str(e):
-            await db.videos.delete_one({"msg_id": msg_id})
-            await db.user_videos.update_many({}, {"$pull": {"seen": msg_id}})
-            await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Removed broken video `{msg_id}`", parse_mode="Markdown")
-            return await callback_get_video(update, context)
-        else:
-            return await query.message.reply_text(f"⚠️ Error: {e}")
-    except TelegramError as e:
-        await query.message.reply_text(f"⚠️ Telegram error: {e}")
-    except Exception as e:
-        await query.message.reply_text(f"⚠️ Unknown error: {e}")
+    await context.bot.send_message(
+        chat_id=uid,
+        text=" ",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📥 Get More Random Videos", callback_data="get_video")]
+        ])
+    )
 
-# ✅ UPDATED AUTO UPLOAD HANDLER
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    sudo_list = [s["_id"] async for s in db.sudos.find()]
-    if not is_sudo(uid, sudo_list):
+    if not await is_sudo(uid):
         return
 
     if update.message.video:
+        video = update.message.video
+        unique_id = video.file_unique_id
+
+        # Check for duplicate
+        existing = await db.videos.find_one({"unique_id": unique_id})
+        if existing:
+            return await update.message.reply_text("⚠️ This video already exists in the vault.")
+
         try:
             sent = await context.bot.copy_message(
                 chat_id=VAULT_CHANNEL_ID,
@@ -181,7 +183,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_id=update.message.message_id,
             )
             try:
-                await add_video(sent.message_id)
+                await add_video(sent.message_id, unique_id=unique_id)
                 await update.message.reply_text("✅ Uploaded to vault and saved.")
             except Exception as e:
                 await update.message.reply_text(f"⚠️ Video copied but DB failed: {e}")
@@ -229,8 +231,7 @@ async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Usage: /remsudo user_id")
 
 async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sudo_list = [s["_id"] async for s in db.sudos.find()]
-    if not is_sudo(update.effective_user.id, sudo_list):
+    if not await is_sudo(update.effective_user.id):
         return
     try:
         target = int(context.args[0])
@@ -240,8 +241,7 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Usage: /ban user_id")
 
 async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sudo_list = [s["_id"] async for s in db.sudos.find()]
-    if not is_sudo(update.effective_user.id, sudo_list):
+    if not await is_sudo(update.effective_user.id):
         return
     try:
         target = int(context.args[0])
@@ -251,8 +251,7 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Usage: /unban user_id")
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sudo_list = [s["_id"] async for s in db.sudos.find()]
-    if not is_sudo(update.effective_user.id, sudo_list):
+    if not await is_sudo(update.effective_user.id):
         return
     if not context.args:
         return await update.message.reply_text("⚠️ Usage: /broadcast your message")
@@ -268,8 +267,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Broadcast sent to {count} users.")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sudo_list = [s["_id"] async for s in db.sudos.find()]
-    if not is_sudo(update.effective_user.id, sudo_list):
+    if not await is_sudo(update.effective_user.id):
         return
     v = await db.videos.count_documents({})
     u = await db.users.count_documents({})
