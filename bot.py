@@ -1,7 +1,7 @@
 import os
 import asyncio
-import datetime
-import redis
+import aioredlock
+import redis.asyncio as redis
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -13,7 +13,6 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from motor.motor_asyncio import AsyncIOMotorClient
-from redlock import Redlock
 
 # ---------- CONFIG ----------
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -34,9 +33,10 @@ WELCOME_IMAGE = "https://files.catbox.moe/19j4mc.jpg"
 COOLDOWN = 5
 cooldowns = {}
 
-# Redis client + Redlock
-redis_client = redis.Redis(host="localhost", port=6379, db=0)
-redlock = Redlock([{"host": "localhost", "port": 6379, "db": 0}])
+# ---------- Async Redis Lock ----------
+redis_pool = redis.ConnectionPool.from_url("redis://localhost")
+redis_conn = redis.Redis(connection_pool=redis_pool)
+lock_manager = aioredlock.Aioredlock([{"host": "localhost", "port": 6379}])
 
 # ---------- HELPERS ----------
 def is_admin(uid):
@@ -55,24 +55,19 @@ async def delete_after_delay(bot, chat_id, message_id, delay):
     except:
         pass
 
-# ---------- REDLOCK VIDEO FETCH ----------
-async def get_video_with_redlock(uid):
+# ---------- REDIS LOCKED VIDEO FETCH ----------
+async def get_video_with_lock(uid):
     watched_doc = await db.watched.find_one({"_id": uid}) or {}
     watched_ids = watched_doc.get("watched_ids", [])
 
-    for _ in range(5):
-        lock = redlock.lock("video_lock", 1000)
-        if lock:
-            video = await db.videos.find_one({"msg_id": {"$nin": watched_ids}})
-            if video:
-                msg_id = video["msg_id"]
-                await db.watched.update_one(
-                    {"_id": uid}, {"$addToSet": {"watched_ids": msg_id}}, upsert=True
-                )
-                redlock.unlock(lock)
-                return video
-            redlock.unlock(lock)
-        await asyncio.sleep(0.2)
+    async with await lock_manager.lock("video_lock", lock_timeout=3):
+        video = await db.videos.find_one({"msg_id": {"$nin": watched_ids}})
+        if video:
+            msg_id = video["msg_id"]
+            await db.watched.update_one(
+                {"_id": uid}, {"$addToSet": {"watched_ids": msg_id}}, upsert=True
+            )
+            return video
     return None
 
 # ---------- HANDLERS ----------
@@ -91,6 +86,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "🚫 You must join our channel to use this bot.\n\n✅ After joining, use /start",
                 reply_markup=btn,
+            )
+            await context.bot.send_message(
+                LOG_CHANNEL_ID,
+                f"🚫 User `{uid}` tried to access without joining channel.",
+                parse_mode="Markdown"
             )
             return
     except:
@@ -128,6 +128,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     await context.bot.send_message(uid, disclaimer, reply_markup=btn, parse_mode="Markdown")
 
+    # ✅ Log user start
+    await context.bot.send_message(
+        LOG_CHANNEL_ID,
+        f"👤 New user started bot:\n"
+        f"• Name: [{update.effective_user.full_name}](tg://user?id={uid})\n"
+        f"• ID: `{uid}`",
+        parse_mode="Markdown"
+    )
+
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     uid = query.from_user.id
@@ -144,7 +153,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     cooldowns[uid] = now + COOLDOWN
 
-    video = await get_video_with_redlock(uid)
+    video = await get_video_with_lock(uid)
     if not video:
         await db.watched.update_one({"_id": uid}, {"$set": {"watched_ids": []}}, upsert=True)
         await query.message.reply_text("📭 No more videos! Resetting watch history... Try again.")
