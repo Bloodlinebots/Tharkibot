@@ -1,6 +1,6 @@
 python-telegram-bot==20.8
 motor==3.4.0
 pymongo==4.7.1
-redis==5.0.3
-aioredlock==0.8.0
-python-dotenv==1.0.1  # optional for .env support
+redis==4.5.5
+aioredlock==0.7.0
+python-dotenv==1.0.1
