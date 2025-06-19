@@ -156,7 +156,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await context.bot.send_message(
         chat_id=uid,
-        text=" ",
+        text="🕒 This video will be automatically deleted after 3 hours "
+        "to prevent copyright issues.",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📥 Get More Random Videos", callback_data="get_video")]
         ])
