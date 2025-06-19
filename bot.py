@@ -34,7 +34,6 @@ cooldowns = {}
 
 # ----- HELPERS -----
 def is_admin(uid): return uid == ADMIN_USER_ID
-
 def is_sudo(uid, sudo_list): return uid in sudo_list or is_admin(uid)
 
 async def add_video(msg_id):
@@ -167,6 +166,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         await query.message.reply_text(f"⚠️ Unknown error: {e}")
 
+# ✅ UPDATED AUTO UPLOAD HANDLER
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     sudo_list = [s["_id"] async for s in db.sudos.find()]
@@ -180,10 +180,15 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from_chat_id=update.message.chat_id,
                 message_id=update.message.message_id,
             )
-            await add_video(sent.message_id)
-            await update.message.reply_text("✅ Uploaded to vault and saved.")
-        except:
-            await update.message.reply_text("⚠️ Upload failed.")
+            try:
+                await add_video(sent.message_id)
+                await update.message.reply_text("✅ Uploaded to vault and saved.")
+            except Exception as e:
+                await update.message.reply_text(f"⚠️ Video copied but DB failed: {e}")
+                await context.bot.send_message(LOG_CHANNEL_ID, f"❌ DB error by {uid}: {e}")
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Upload failed: {e}")
+            await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error by {uid}: {e}")
 
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
