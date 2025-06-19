@@ -19,7 +19,7 @@ ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
 SUPPORT_LINK = "https://t.me/botmine_tech"
 TERMS_LINK = "https://t.me/bot_backup/7"
-WELCOME_IMAGE = "https://files.catbox.moe/19j4mc.jpg"
+WELCOME_IMAGE = "https://graph.org/file/a13e9733afdad69720d67.jpg"
 
 # ----- INIT -----
 client = AsyncIOMotorClient(MONGO_URI)
