@@ -1,19 +1,15 @@
 {
   "name": "Telegram Video Vault Bot",
-  "description": "Telegram bot that shares videos with MongoDB",
+  "description": "Telegram bot that shares videos from a vault using MongoDB",
   "repository": "https://github.com/yourusername/your-repo-name",
-  "keywords": ["telegram", "bot", "mongo", "video"],
+  "keywords": ["telegram", "bot", "mongodb", "video", "asyncio"],
   "env": {
     "TELEGRAM_BOT_TOKEN": {
       "description": "Your bot's API token from @BotFather",
       "required": true
     },
     "MONGO_URI": {
-      "description": "MongoDB connection URI (use MongoDB Atlas or other host)",
-      "required": true
-    },
-    "REDIS_URL": {
-      "description": "Your Redis URI from Upstash",
+      "description": "MongoDB connection URI (MongoDB Atlas or other host)",
       "required": true
     }
   },
