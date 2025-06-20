@@ -24,7 +24,6 @@ SUPPORT_LINK = "https://t.me/botmine_tech"
 TERMS_LINK = "https://t.me/bot_backup/7"
 WELCOME_IMAGE = "https://graph.org/file/a13e9733afdad69720d67.jpg"
 
-# ----- INIT -----
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
 
@@ -54,24 +53,25 @@ def join_button_text(channel):
 
 async def check_force_join(uid, bot):
     join_buttons = []
+    joined_all = True
 
     for channel in FORCE_JOIN_CHANNELS:
         try:
             if channel["type"] == "public":
                 member = await bot.get_chat_member(f"@{channel['username']}", uid)
                 if member.status in ["left", "kicked"]:
+                    joined_all = False
                     join_buttons.append(
                         InlineKeyboardButton(
                             join_button_text(channel),
                             url=f"https://t.me/{channel['username']}"
                         )
                     )
-
             elif channel["type"] == "private":
                 chat_id = channel["chat_id"]
                 member = await bot.get_chat_member(chat_id, uid)
-
                 if member.status in ["left", "kicked"]:
+                    joined_all = False
                     invite = await bot.create_chat_invite_link(
                         chat_id=chat_id,
                         name="ForceJoin",
@@ -83,7 +83,8 @@ async def check_force_join(uid, bot):
                             url=invite.invite_link
                         )
                     )
-        except Exception:
+        except:
+            joined_all = False
             if channel["type"] == "public":
                 join_buttons.append(
                     InlineKeyboardButton(
@@ -104,28 +105,26 @@ async def check_force_join(uid, bot):
                     )
                 )
 
-    return join_buttons
+    return joined_all, join_buttons
 
 # ----- HANDLERS -----
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    user = update.effective_user
+
     if await db.banned.find_one({"_id": uid}):
         return await update.message.reply_text("🛑 You are banned from using this bot.")
 
-    user_data = await db.users.find_one({"_id": uid})
-    if not user_data or not user_data.get("joined_channels"):
-        join_buttons = await check_force_join(uid, context.bot)
-        if join_buttons:
-            join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
-            return await update.message.reply_text(
-                "🛑 You must join the following channels to use this bot:",
-                reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
-            )
+    joined_all, join_buttons = await check_force_join(uid, context.bot)
+    if not joined_all:
+        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="force_check"))
+        return await update.message.reply_text(
+            "🛑 You must join all required channels to use this bot:",
+            reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
+        )
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
 
-    user = update.effective_user
     log_text = (
         f"📥 New User Started Bot\n"
         f"👤 Name: {user.full_name}\n"
@@ -164,20 +163,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def recheck_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     await update.callback_query.answer()
 
-    join_buttons = await check_force_join(uid, context.bot)
-    if join_buttons:
-        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
+    joined_all, join_buttons = await check_force_join(uid, context.bot)
+    if not joined_all:
+        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="force_check"))
         return await update.callback_query.message.edit_text(
             "❗ You still haven't joined all required channels.",
             reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
         )
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
-    return await start(update, context)
+    await update.callback_query.message.delete()
+    msg = Update(update.update_id, message=update.effective_message)
+    await start(msg, context)
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -220,14 +221,11 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Removed broken video `{msg_id}`", parse_mode="Markdown")
                 return await callback_get_video(update, context)
             else:
-                await query.message.reply_text(f"⚠️ Error: {e}")
-                return
+                return await query.message.reply_text(f"⚠️ Error: {e}")
         except TelegramError as e:
-            await query.message.reply_text(f"⚠️ Telegram error: {e}")
-            return
+            return await query.message.reply_text(f"⚠️ Telegram error: {e}")
         except Exception as e:
-            await query.message.reply_text(f"⚠️ Unknown error: {e}")
-            return
+            return await query.message.reply_text(f"⚠️ Unknown error: {e}")
 
     await context.bot.send_message(
         chat_id=uid,
@@ -257,12 +255,8 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from_chat_id=update.message.chat_id,
                 message_id=update.message.message_id,
             )
-            try:
-                await add_video(sent.message_id, unique_id=unique_id)
-                await update.message.reply_text("✅ Uploaded to vault and saved.")
-            except Exception as e:
-                await update.message.reply_text(f"⚠️ Video copied but DB failed: {e}")
-                await context.bot.send_message(LOG_CHANNEL_ID, f"❌ DB error by {uid}: {e}")
+            await add_video(sent.message_id, unique_id=unique_id)
+            await update.message.reply_text("✅ Uploaded to vault and saved.")
         except Exception as e:
             await update.message.reply_text(f"⚠️ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error by {uid}: {e}")
@@ -359,7 +353,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
-    app.add_handler(CallbackQueryHandler(recheck_join, pattern="recheck_join"))
+    app.add_handler(CallbackQueryHandler(force_check_callback, pattern="force_check"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
 
