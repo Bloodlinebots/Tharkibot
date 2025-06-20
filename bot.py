@@ -27,8 +27,8 @@ WELCOME_IMAGE = "https://graph.org/file/a13e9733afdad69720d67.jpg"
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["telegram_bot"]
 
-# ----- HELPERS -----
 def is_admin(uid): return uid == ADMIN_USER_ID
+
 async def is_sudo(uid):
     sudo_list = [s["_id"] async for s in db.sudos.find()]
     return uid in sudo_list or is_admin(uid)
@@ -107,7 +107,6 @@ async def check_force_join(uid, bot):
 
     return joined_all, join_buttons
 
-# ----- HANDLERS -----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
@@ -278,7 +277,6 @@ async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Need help? Contact the developer.")
 
-# ----- ADMIN -----
 async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_USER_ID:
         return
@@ -348,7 +346,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ----- MAIN -----
-def main():
+async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
@@ -365,7 +363,9 @@ def main():
     app.add_handler(CommandHandler(["stats", "status"], stats_command))
 
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
-    app.run_polling()
+
+    await app.run_polling()
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
