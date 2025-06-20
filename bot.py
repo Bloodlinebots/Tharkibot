@@ -15,8 +15,8 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNELS = [
-    {"type": "public", "username": "bot_backup"},
-    {"type": "private", "invite_link": "https://t.me/+5TtbYhth9Q1hOWI1", "name": "rasmalai"}
+    {"type": "public", "username": "bot_backup", "name": "rasili chu💦"},
+    {"type": "private", "chat_id": -1002799718375, "name": "rasmalai"}
 ]
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
@@ -47,25 +47,63 @@ async def delete_after_delay(bot, chat_id, message_id, delay):
     except:
         pass
 
+def join_button_text(channel):
+    return f"Join {channel.get('name')}" if channel.get('name') else (
+        f"Join @{channel['username']}" if channel['type'] == 'public' else "Join Private"
+    )
+
 async def check_force_join(uid, bot):
     join_buttons = []
+
     for channel in FORCE_JOIN_CHANNELS:
         try:
             if channel["type"] == "public":
                 member = await bot.get_chat_member(f"@{channel['username']}", uid)
                 if member.status in ["left", "kicked"]:
                     join_buttons.append(
-                        InlineKeyboardButton(f"Join @{channel['username']}", url=f"https://t.me/{channel['username']}")
+                        InlineKeyboardButton(
+                            join_button_text(channel),
+                            url=f"https://t.me/{channel['username']}"
+                        )
                     )
+
             elif channel["type"] == "private":
-                join_buttons.append(
-                    InlineKeyboardButton(f"Join {channel.get('name', 'Private Channel')}", url=channel["invite_link"])
-                )
-        except:
+                chat_id = channel["chat_id"]
+                member = await bot.get_chat_member(chat_id, uid)
+
+                if member.status in ["left", "kicked"]:
+                    invite = await bot.create_chat_invite_link(
+                        chat_id=chat_id,
+                        name="ForceJoin",
+                        creates_join_request=False
+                    )
+                    join_buttons.append(
+                        InlineKeyboardButton(
+                            join_button_text(channel),
+                            url=invite.invite_link
+                        )
+                    )
+        except Exception:
             if channel["type"] == "public":
                 join_buttons.append(
-                    InlineKeyboardButton(f"Join @{channel['username']}", url=f"https://t.me/{channel['username']}")
+                    InlineKeyboardButton(
+                        join_button_text(channel),
+                        url=f"https://t.me/{channel['username']}"
+                    )
                 )
+            else:
+                invite = await bot.create_chat_invite_link(
+                    chat_id=channel["chat_id"],
+                    name="ForceJoin",
+                    creates_join_request=False
+                )
+                join_buttons.append(
+                    InlineKeyboardButton(
+                        join_button_text(channel),
+                        url=invite.invite_link
+                    )
+                )
+
     return join_buttons
 
 # ----- HANDLERS -----
@@ -75,15 +113,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await db.banned.find_one({"_id": uid}):
         return await update.message.reply_text("🛑 You are banned from using this bot.")
 
-    join_buttons = await check_force_join(uid, context.bot)
-    if join_buttons:
-        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
-        return await update.message.reply_text(
-            "🛑 You must join the following channels to use this bot:",
-            reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
-        )
+    user_data = await db.users.find_one({"_id": uid})
+    if not user_data or not user_data.get("joined_channels"):
+        join_buttons = await check_force_join(uid, context.bot)
+        if join_buttons:
+            join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
+            return await update.message.reply_text(
+                "🛑 You must join the following channels to use this bot:",
+                reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
+            )
 
-    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
+    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
 
     user = update.effective_user
     log_text = (
@@ -97,7 +137,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_name = (await context.bot.get_me()).first_name
     caption = (
         f"🥵 Welcome to {bot_name}!\n"
-        "Here you will access the most unseen videos.\n👇 Tap below to explore:"
+        "Here you will access the most unseen 💦 videos.\n👇 Tap below to explore:"
     )
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
@@ -123,6 +163,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]),
         parse_mode="Markdown"
     )
+
+async def recheck_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    await update.callback_query.answer()
+
+    join_buttons = await check_force_join(uid, context.bot)
+    if join_buttons:
+        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
+        return await update.callback_query.message.edit_text(
+            "❗ You still haven't joined all required channels.",
+            reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
+        )
+
+    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
+    return await start(update, context)
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -304,7 +359,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
-    app.add_handler(CallbackQueryHandler(start, pattern="recheck_join"))
+    app.add_handler(CallbackQueryHandler(recheck_join, pattern="recheck_join"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
 
