@@ -157,7 +157,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 {"$addToSet": {"seen": msg_id}},
                 upsert=True
             )
-            context.application.create_task(delete_after_delay(context.bot, uid, sent.message_id, 10800))
+            context.application.create_task(delete_after_delay(context.bot, uid, sent.message_id, 3600))
         except BadRequest as e:
             if "MESSAGE_ID_INVALID" in str(e):
                 await db.videos.delete_one({"msg_id": msg_id})
