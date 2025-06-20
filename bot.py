@@ -15,8 +15,8 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
 FORCE_JOIN_CHANNELS = [
-    {"type": "public", "username": "bot_backup", "name": "rasili chu💦"},
-    {"type": "private", "chat_id": -1002799718375, "name": "rasmalai"}
+    {"type": "public", "username": "bot_backup", "name": "RASILI CHU💦"},
+    {"type": "private", "chat_id": -1002799718375, "name": "RASMALAI🥵"}
 ]
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
