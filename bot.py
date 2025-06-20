@@ -14,7 +14,10 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
-FORCE_JOIN_CHANNEL = "bot_backup"
+FORCE_JOIN_CHANNELS = [
+    {"type": "public", "username": "bot_backup"},
+    {"type": "private", "invite_link": "https://t.me/+5TtbYhth9Q1hOWI1", "name": "rasmalai"}
+]
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
 SUPPORT_LINK = "https://t.me/botmine_tech"
@@ -44,6 +47,27 @@ async def delete_after_delay(bot, chat_id, message_id, delay):
     except:
         pass
 
+async def check_force_join(uid, bot):
+    join_buttons = []
+    for channel in FORCE_JOIN_CHANNELS:
+        try:
+            if channel["type"] == "public":
+                member = await bot.get_chat_member(f"@{channel['username']}", uid)
+                if member.status in ["left", "kicked"]:
+                    join_buttons.append(
+                        InlineKeyboardButton(f"Join @{channel['username']}", url=f"https://t.me/{channel['username']}")
+                    )
+            elif channel["type"] == "private":
+                join_buttons.append(
+                    InlineKeyboardButton(f"Join {channel.get('name', 'Private Channel')}", url=channel["invite_link"])
+                )
+        except:
+            if channel["type"] == "public":
+                join_buttons.append(
+                    InlineKeyboardButton(f"Join @{channel['username']}", url=f"https://t.me/{channel['username']}")
+                )
+    return join_buttons
+
 # ----- HANDLERS -----
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -51,17 +75,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await db.banned.find_one({"_id": uid}):
         return await update.message.reply_text("🛑 You are banned from using this bot.")
 
-    try:
-        member = await context.bot.get_chat_member(f"@{FORCE_JOIN_CHANNEL}", uid)
-        if member.status in ["left", "kicked"]:
-            return await update.message.reply_text(
-                "🛑 Join our channel first to use this bot.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Join Channel", url=f"https://t.me/{FORCE_JOIN_CHANNEL}")]
-                ])
-            )
-    except:
-        pass
+    join_buttons = await check_force_join(uid, context.bot)
+    if join_buttons:
+        join_buttons.append(InlineKeyboardButton("✅ I Joined", callback_data="recheck_join"))
+        return await update.message.reply_text(
+            "🛑 You must join the following channels to use this bot:",
+            reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
+        )
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
 
@@ -156,8 +176,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await context.bot.send_message(
         chat_id=uid,
-        text="🕒 This video will be automatically deleted after 3 hours "
-        "to prevent copyright issues.",
+        text="This video will auto-destruct in 1 hour ⌛
+We auto-delete it to keep things clean & copyright-safe 🚫 ",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📥 Get More Random Videos", callback_data="get_video")]
         ])
@@ -172,7 +192,6 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video = update.message.video
         unique_id = video.file_unique_id
 
-        # Check for duplicate
         existing = await db.videos.find_one({"unique_id": unique_id})
         if existing:
             return await update.message.reply_text("⚠️ This video already exists in the vault.")
@@ -285,6 +304,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
+    app.add_handler(CallbackQueryHandler(start, pattern="recheck_join"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
 
