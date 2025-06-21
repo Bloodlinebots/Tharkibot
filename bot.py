@@ -1,5 +1,4 @@
 import os
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
@@ -7,6 +6,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, TelegramError
 from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio
 
 # ----- CONFIG -----
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -107,6 +107,8 @@ async def check_force_join(uid, bot):
 
     return joined_all, join_buttons
 
+# --- Handlers ---
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
@@ -122,42 +124,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
         )
 
-    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
+    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
 
-    log_text = (
-        f"📥 New User Started Bot\n"
-        f"👤 Name: {user.full_name}\n"
-        f"🆔 ID: {user.id}\n"
-        f"📛 Username: @{user.username or 'N/A'}"
+    await context.bot.send_message(
+        LOG_CHANNEL_ID,
+        f"📥 New User Started Bot\n👤 Name: {user.full_name}\n🆔 ID: {user.id}\n📛 Username: @{user.username or 'N/A'}"
     )
-    await context.bot.send_message(LOG_CHANNEL_ID, log_text)
 
     bot_name = (await context.bot.get_me()).first_name
-    caption = (
-        f"🥵 Welcome to {bot_name}!\n"
-        "Here you will access the most unseen 💦 videos.\n👇 Tap below to explore:"
-    )
     await update.message.reply_photo(
         photo=WELCOME_IMAGE,
-        caption=caption,
+        caption=f"🥵 Welcome to {bot_name}!\nHere you will access the most unseen 💦 videos.\n👇 Tap below to explore:",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
             [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-            [
-                InlineKeyboardButton("Support", url=SUPPORT_LINK),
-                InlineKeyboardButton("Help", callback_data="show_privacy_info")
-            ]
+            [InlineKeyboardButton("Support", url=SUPPORT_LINK), InlineKeyboardButton("Help", callback_data="show_privacy_info")]
         ])
     )
 
-    disclaimer = (
-        "⚠️ **Disclaimer** ⚠️\n\n"
-        "We do NOT produce or spread adult content.\n"
-        "This bot is only for forwarding files.\n"
-        "Please read terms and conditions."
-    )
     await context.bot.send_message(
-        uid, disclaimer,
+        uid,
+        "⚠️ **Disclaimer** ⚠️\n\nWe do NOT produce or spread adult content.\nThis bot is only for forwarding files.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]),
         parse_mode="Markdown"
     )
@@ -174,7 +161,7 @@ async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=InlineKeyboardMarkup([[btn] for btn in join_buttons])
         )
 
-    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid, "joined_channels": True}}, upsert=True)
+    await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
     await update.callback_query.message.delete()
     msg = Update(update.update_id, message=update.effective_message)
     await start(msg, context)
@@ -228,8 +215,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await context.bot.send_message(
         chat_id=uid,
-        text="""This video will auto-destruct in 1 hour ⌛
-We auto-delete it to keep things clean & copyright-safe 🚫""",
+        text="This video will auto-destruct in 1 hour ⌛\nWe auto-delete it to keep things clean & copyright-safe 🚫",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📥 Get More Random Videos", callback_data="get_video")]
         ])
@@ -259,6 +245,8 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text(f"⚠️ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error by {uid}: {e}")
+
+# --- Other Commands ---
 
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -345,35 +333,26 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ----- MAIN -----
-async def main():
+# --- Main ---
+
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_get_video, pattern="get_video"))
     app.add_handler(CallbackQueryHandler(show_privacy_info, pattern="show_privacy_info"))
     app.add_handler(CallbackQueryHandler(force_check_callback, pattern="force_check"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
-
     app.add_handler(CommandHandler("addsudo", add_sudo))
     app.add_handler(CommandHandler("remsudo", remove_sudo))
     app.add_handler(CommandHandler("ban", ban_user))
     app.add_handler(CommandHandler("unban", unban_user))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler(["stats", "status"], stats_command))
-
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-    await app.run_polling()
-
-
-import sys
+    app.run_polling()
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-    try:
-        asyncio.run(main())  # This works well on Heroku & Linux!
-    except (RuntimeError, KeyboardInterrupt):
-        pass
+    main()
