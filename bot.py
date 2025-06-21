@@ -373,8 +373,7 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(main())
-    finally:
-        loop.close()
+        asyncio.run(main())  # This works well on Heroku & Linux!
+    except (RuntimeError, KeyboardInterrupt):
+        pass
