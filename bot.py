@@ -1,4 +1,5 @@
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
@@ -6,7 +7,6 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, TelegramError
 from motor.motor_asyncio import AsyncIOMotorClient
-import asyncio
 
 # ----- CONFIG -----
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -107,7 +107,28 @@ async def check_force_join(uid, bot):
 
     return joined_all, join_buttons
 
-# --- Handlers ---
+# --- WELCOME MESSAGE HELPER ---
+
+async def send_welcome(uid, context):
+    bot_name = (await context.bot.get_me()).first_name
+    await context.bot.send_photo(
+        uid,
+        photo=WELCOME_IMAGE,
+        caption=f"🥵 Welcome to {bot_name}!\nHere you will access the most unseen 💦 videos.\n👇 Tap below to explore:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
+            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
+            [InlineKeyboardButton("Support", url=SUPPORT_LINK), InlineKeyboardButton("Help", callback_data="show_privacy_info")]
+        ])
+    )
+    await context.bot.send_message(
+        uid,
+        "⚠️ **Disclaimer** ⚠️\n\nWe do NOT produce or spread adult content.\nThis bot is only for forwarding files.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]),
+        parse_mode="Markdown"
+    )
+
+# --- HANDLERS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -131,23 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📥 New User Started Bot\n👤 Name: {user.full_name}\n🆔 ID: {user.id}\n📛 Username: @{user.username or 'N/A'}"
     )
 
-    bot_name = (await context.bot.get_me()).first_name
-    await update.message.reply_photo(
-        photo=WELCOME_IMAGE,
-        caption=f"🥵 Welcome to {bot_name}!\nHere you will access the most unseen 💦 videos.\n👇 Tap below to explore:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📩 Get Random Video", callback_data="get_video")],
-            [InlineKeyboardButton("Developer", url=DEVELOPER_LINK)],
-            [InlineKeyboardButton("Support", url=SUPPORT_LINK), InlineKeyboardButton("Help", callback_data="show_privacy_info")]
-        ])
-    )
-
-    await context.bot.send_message(
-        uid,
-        "⚠️ **Disclaimer** ⚠️\n\nWe do NOT produce or spread adult content.\nThis bot is only for forwarding files.",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]),
-        parse_mode="Markdown"
-    )
+    await send_welcome(uid, context)
 
 async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -163,8 +168,7 @@ async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
     await update.callback_query.message.delete()
-    msg = Update(update.update_id, message=update.effective_message)
-    await start(msg, context)
+    await send_welcome(uid, context)
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -215,7 +219,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await context.bot.send_message(
         chat_id=uid,
-        text="This video will auto-destruct in 1 hour ⌛\nWe auto-delete it to keep things clean & copyright-safe 🚫",
+        text="This video will auto-destruct in 1 hour ⌛",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📥 Get More Random Videos", callback_data="get_video")]
         ])
@@ -246,7 +250,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error by {uid}: {e}")
 
-# --- Other Commands ---
+# --- OTHER COMMANDS ---
 
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -333,7 +337,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# --- Main ---
+# --- MAIN ---
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -348,8 +352,8 @@ def main():
     app.add_handler(CommandHandler("remsudo", remove_sudo))
     app.add_handler(CommandHandler("ban", ban_user))
     app.add_handler(CommandHandler("unban", unban_user))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler(["stats", "status"], stats_command))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
     app.run_polling()
