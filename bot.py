@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # ----- CONFIG -----
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+HEROKU_APP_NAME = os.getenv("HEROKU_APP_NAME")
 
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
@@ -69,30 +70,22 @@ async def check_force_join(uid, bot):
                 member = await bot.get_chat_member(f"@{channel['username']}", uid)
                 if member.status in ["left", "kicked"]:
                     joined_all = False
-                    join_buttons.append(
-                        InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}")
-                    )
+                    join_buttons.append(InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}"))
             elif channel["type"] == "private":
                 chat_id = channel["chat_id"]
                 member = await bot.get_chat_member(chat_id, uid)
                 if member.status in ["left", "kicked"]:
                     joined_all = False
                     invite = await bot.create_chat_invite_link(chat_id=chat_id, name="ForceJoin", creates_join_request=False)
-                    join_buttons.append(
-                        InlineKeyboardButton(join_button_text(channel), url=invite.invite_link)
-                    )
+                    join_buttons.append(InlineKeyboardButton(join_button_text(channel), url=invite.invite_link))
         except:
             joined_all = False
             try:
                 if channel["type"] == "public":
-                    join_buttons.append(
-                        InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}")
-                    )
+                    join_buttons.append(InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}"))
                 else:
                     invite = await bot.create_chat_invite_link(chat_id=channel["chat_id"], name="ForceJoin", creates_join_request=False)
-                    join_buttons.append(
-                        InlineKeyboardButton(join_button_text(channel), url=invite.invite_link)
-                    )
+                    join_buttons.append(InlineKeyboardButton(join_button_text(channel), url=invite.invite_link))
             except:
                 pass
 
@@ -112,12 +105,11 @@ async def send_welcome(uid, context):
     )
     await context.bot.send_message(
         uid,
-        "⚠️ **Disclaimer** ⚠️\n\nWe do NOT produce or spread adult content.\nThis bot is only for forwarding files.",
+        "⚠️ Disclaimer ⚠️\n\nWe do NOT produce or spread adult content.\nThis bot is only for forwarding files.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📘 Terms & Conditions", url=TERMS_LINK)]]),
         parse_mode="Markdown"
     )
 
-# --- HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
@@ -137,15 +129,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(
         LOG_CHANNEL_ID,
-        f"📥 New User Started Bot\n👤 Name: {user.full_name}\n🆔 ID: {user.id}\n📛 Username: @{user.username or 'N/A'}"
+        f"📅 New User Started Bot\n👤 Name: {user.full_name}\n🆔 ID: {user.id}\n💼 Username: @{user.username or 'N/A'}"
     )
 
     await send_welcome(uid, context)
 
 async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
+    try:
+        await query.answer()
+    except:
+        pass
 
     uid = query.from_user.id
     joined_all, join_buttons = await check_force_join(uid, context.bot)
@@ -162,8 +156,10 @@ async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
+    try:
+        await query.answer()
+    except:
+        pass
 
     uid = query.from_user.id
 
@@ -179,7 +175,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ]).to_list(4)
 
     if not video_docs:
-        return await query.message.reply_text("📭 No more unseen videos. Please wait for more uploads.")
+        return await query.message.reply_text("📬 No more unseen videos. Please wait for more uploads.")
 
     for video in video_docs:
         msg_id = video["msg_id"]
@@ -217,7 +213,8 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not await is_sudo(uid): return
+    if not await is_sudo(uid):
+        return
 
     if update.message.video:
         video = update.message.video
@@ -239,10 +236,28 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error by {uid}: {e}")
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not is_admin(uid):
+        return
+
+    total_users = await db.users.count_documents({})
+    total_videos = await db.videos.count_documents({})
+    total_banned = await db.banned.count_documents({})
+
+    await update.message.reply_text(
+        f"📊 Bot Statistics:\n\n"
+        f"👥 Total Users: {total_users}\n"
+        f"🎥 Total Videos: {total_videos}\n"
+        f"⛔ Banned Users: {total_banned}"
+    )
+
 async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
+    try:
+        await query.answer()
+    except:
+        pass
     await query.message.reply_text("/privacy - View bot's Terms and Conditions")
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,15 +279,21 @@ async def main():
     app.add_handler(CallbackQueryHandler(force_check_callback, pattern="force_check"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
+    PORT = int(os.environ.get('PORT', 5000))
+    WEBHOOK_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com"
+
     await app.initialize()
+    await app.bot.set_webhook(WEBHOOK_URL)
     await app.start()
-    logger.info("✅ Bot started.")
-    await app.updater.start_polling()
-    await app.updater.idle()
-    await app.stop()
-    await app.shutdown()
+    logger.info("✅ Bot started using webhook.")
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 if __name__ == "__main__":
     try:
