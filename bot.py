@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
@@ -7,6 +8,13 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, TelegramError
 from motor.motor_asyncio import AsyncIOMotorClient
+
+# ---------- Logging Setup ----------
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # ----- CONFIG -----
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -62,48 +70,28 @@ async def check_force_join(uid, bot):
                 if member.status in ["left", "kicked"]:
                     joined_all = False
                     join_buttons.append(
-                        InlineKeyboardButton(
-                            join_button_text(channel),
-                            url=f"https://t.me/{channel['username']}"
-                        )
+                        InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}")
                     )
             elif channel["type"] == "private":
                 chat_id = channel["chat_id"]
                 member = await bot.get_chat_member(chat_id, uid)
                 if member.status in ["left", "kicked"]:
                     joined_all = False
-                    invite = await bot.create_chat_invite_link(
-                        chat_id=chat_id,
-                        name="ForceJoin",
-                        creates_join_request=False
-                    )
+                    invite = await bot.create_chat_invite_link(chat_id=chat_id, name="ForceJoin", creates_join_request=False)
                     join_buttons.append(
-                        InlineKeyboardButton(
-                            join_button_text(channel),
-                            url=invite.invite_link
-                        )
+                        InlineKeyboardButton(join_button_text(channel), url=invite.invite_link)
                     )
         except:
             joined_all = False
             try:
                 if channel["type"] == "public":
                     join_buttons.append(
-                        InlineKeyboardButton(
-                            join_button_text(channel),
-                            url=f"https://t.me/{channel['username']}"
-                        )
+                        InlineKeyboardButton(join_button_text(channel), url=f"https://t.me/{channel['username']}")
                     )
                 else:
-                    invite = await bot.create_chat_invite_link(
-                        chat_id=channel["chat_id"],
-                        name="ForceJoin",
-                        creates_join_request=False
-                    )
+                    invite = await bot.create_chat_invite_link(chat_id=channel["chat_id"], name="ForceJoin", creates_join_request=False)
                     join_buttons.append(
-                        InlineKeyboardButton(
-                            join_button_text(channel),
-                            url=invite.invite_link
-                        )
+                        InlineKeyboardButton(join_button_text(channel), url=invite.invite_link)
                     )
             except:
                 pass
@@ -130,7 +118,6 @@ async def send_welcome(uid, context):
     )
 
 # --- HANDLERS ---
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
@@ -215,8 +202,6 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await db.user_videos.update_many({}, {"$pull": {"seen": msg_id}})
                 await context.bot.send_message(LOG_CHANNEL_ID, f"⚠️ Removed broken video `{msg_id}`", parse_mode="Markdown")
                 return await callback_get_video(update, context)
-            else:
-                return
         except TelegramError:
             return
         except:
@@ -232,8 +217,7 @@ async def callback_get_video(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if not await is_sudo(uid):
-        return
+    if not await is_sudo(uid): return
 
     if update.message.video:
         video = update.message.video
@@ -259,91 +243,19 @@ async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try: await query.answer()
     except: pass
-
     await query.message.reply_text("/privacy - View bot's Terms and Conditions")
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        await context.bot.forward_message(
-            chat_id=update.effective_chat.id,
-            from_chat_id="@bot_backup",
-            message_id=7,
-        )
+        await context.bot.forward_message(chat_id=update.effective_chat.id, from_chat_id="@bot_backup", message_id=7)
     except:
         await update.message.reply_text("⚠️ Could not fetch privacy policy.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Need help? Contact the developer.")
 
-async def add_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_USER_ID:
-        return
-    try:
-        target = int(context.args[0])
-        await db.sudos.update_one({"_id": target}, {"$set": {"_id": target}}, upsert=True)
-        await update.message.reply_text(f"✅ Added {target} as sudo.")
-    except:
-        await update.message.reply_text("⚠️ Usage: /addsudo user_id")
-
-async def remove_sudo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_USER_ID:
-        return
-    try:
-        target = int(context.args[0])
-        await db.sudos.delete_one({"_id": target})
-        await update.message.reply_text(f"❌ Removed {target} from sudo.")
-    except:
-        await update.message.reply_text("⚠️ Usage: /remsudo user_id")
-
-async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_sudo(update.effective_user.id):
-        return
-    try:
-        target = int(context.args[0])
-        await db.banned.update_one({"_id": target}, {"$set": {"_id": target}}, upsert=True)
-        await update.message.reply_text(f"🚫 Banned user {target}")
-    except:
-        await update.message.reply_text("⚠️ Usage: /ban user_id")
-
-async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_sudo(update.effective_user.id):
-        return
-    try:
-        target = int(context.args[0])
-        await db.banned.delete_one({"_id": target})
-        await update.message.reply_text(f"✅ Unbanned user {target}")
-    except:
-        await update.message.reply_text("⚠️ Usage: /unban user_id")
-
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_sudo(update.effective_user.id):
-        return
-    if not context.args:
-        return await update.message.reply_text("⚠️ Usage: /broadcast your message")
-
-    msg = " ".join(context.args)
-    count = 0
-    async for user in db.users.find():
-        try:
-            await context.bot.send_message(user["_id"], msg)
-            count += 1
-        except:
-            pass
-    await update.message.reply_text(f"✅ Broadcast sent to {count} users.")
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await is_sudo(update.effective_user.id):
-        return
-    v = await db.videos.count_documents({})
-    u = await db.users.count_documents({})
-    s = await db.sudos.count_documents({})
-    b = await db.banned.count_documents({})
-    await update.message.reply_text(
-        f"📊 **Bot Stats**\n\n🎞 Videos: `{v}`\n👥 Users: `{u}`\n🛡 Sudo: `{s}`\n🚫 Banned: `{b}`",
-        parse_mode="Markdown"
-    )
-
-def main():
+# ---- MAIN ----
+async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -352,15 +264,19 @@ def main():
     app.add_handler(CallbackQueryHandler(force_check_callback, pattern="force_check"))
     app.add_handler(CommandHandler("privacy", privacy_command))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("addsudo", add_sudo))
-    app.add_handler(CommandHandler("remsudo", remove_sudo))
-    app.add_handler(CommandHandler("ban", ban_user))
-    app.add_handler(CommandHandler("unban", unban_user))
-    app.add_handler(CommandHandler(["stats", "status"], stats_command))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    logger.info("✅ Bot started.")
+    await app.updater.start_polling()
+    await app.updater.idle()
+    await app.stop()
+    await app.shutdown()
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
