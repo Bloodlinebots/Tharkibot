@@ -341,6 +341,17 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# ✅ NEW: Reset seen list
+async def reset_seen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_sudo(update.effective_user.id):
+        return
+    try:
+        target = int(context.args[0])
+        await db.user_videos.update_one({"_id": target}, {"$set": {"seen": []}}, upsert=True)
+        await update.message.reply_text(f"✅ Reset seen list for user {target}")
+    except:
+        await update.message.reply_text("⚠️ Usage: /reset_seen user_id")
+
 # Delete webhook before polling starts
 async def delete_webhook():
     async with aiohttp.ClientSession() as session:
@@ -348,7 +359,6 @@ async def delete_webhook():
             data = await resp.json()
             print("🔧 Webhook delete response:", data)
 
-# Main Function
 def delete_webhook_sync():
     import requests
     url = f"https://api.telegram.org/bot{TOKEN}/deleteWebhook"
@@ -375,6 +385,7 @@ def main():
     app.add_handler(CommandHandler("unban", unban_user))
     app.add_handler(CommandHandler(["stats", "status"], stats_command))
     app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("reset_seen", reset_seen))  # 👈 Added here
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
     print("✅ Bot started with polling...")
