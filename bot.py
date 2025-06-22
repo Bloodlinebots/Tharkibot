@@ -1,5 +1,6 @@
 import os
 import asyncio
+import aiohttp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
@@ -129,8 +130,6 @@ async def send_welcome(uid, context):
         parse_mode="Markdown"
     )
 
-# --- HANDLERS ---
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
@@ -259,7 +258,6 @@ async def show_privacy_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try: await query.answer()
     except: pass
-
     await query.message.reply_text("/privacy - View bot's Terms and Conditions")
 
 async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -343,7 +341,26 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# Delete webhook before polling starts
+async def delete_webhook():
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook") as resp:
+            data = await resp.json()
+            print("🔧 Webhook delete response:", data)
+
+# Main Function
+def delete_webhook_sync():
+    import requests
+    url = f"https://api.telegram.org/bot{TOKEN}/deleteWebhook"
+    try:
+        r = requests.get(url)
+        print("🔧 Webhook deleted:", r.json())
+    except Exception as e:
+        print("❌ Failed to delete webhook:", e)
+
 def main():
+    delete_webhook_sync()
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -360,6 +377,7 @@ def main():
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(MessageHandler(filters.VIDEO, auto_upload))
 
+    print("✅ Bot started with polling...")
     app.run_polling()
 
 if __name__ == "__main__":
