@@ -1,6 +1,6 @@
 {
   "name": "Telegram Video Vault Bot",
-  "description": "A Telegram bot that delivers videos from a secure vault using MongoDB and webhook integration.",
+  "description": "Telegram bot that shares videos from a vault using MongoDB",
   "repository": "https://github.com/yourusername/your-repo-name",
   "keywords": ["telegram", "bot", "mongodb", "video", "asyncio"],
   "env": {
@@ -9,11 +9,7 @@
       "required": true
     },
     "MONGO_URI": {
-      "description": "MongoDB connection URI (MongoDB Atlas or localhost)",
-      "required": true
-    },
-    "HEROKU_APP_NAME": {
-      "description": "Heroku app name used for webhook setup (e.g., mybot123)",
+      "description": "MongoDB connection URI (MongoDB Atlas or other host)",
       "required": true
     }
   },
