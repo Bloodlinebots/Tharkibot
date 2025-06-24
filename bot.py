@@ -111,7 +111,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "▪️ Random Photos/Videos\n▪️ Earn Coins via Referrals\n▪️ Buy Premium Access\n\n"
         f"👥 Referral Bonus: {REFERRAL_REWARD} coins\n"
         f"🪙 You start with {DEFAULT_POINTS} Free coins!\n\n"
-        f"🔗 Refer link (https://t.me/{bot_info.username}?start={uid})"
+        f"🔗 Refer link (https://t.me/tharki_hub_bot?start={uid})"
     )
 
     await context.bot.send_photo(
