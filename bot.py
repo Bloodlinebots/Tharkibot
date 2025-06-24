@@ -277,9 +277,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_broadcast"] = True
         await query.edit_message_text("📢 Send the message to broadcast.", reply_markup=back_button())
     elif query.data == "admin_gift":
-        context.user_data.clear()
-        context.user_data["awaiting_gift"] = True
-        await query.edit_message_text("🎁 Send number of coins to gift all users.", reply_markup=back_button())
+    logger.info("Gift mode ON")
+    context.user_data.clear()
+    context.user_data["awaiting_gift"] = True
+    await query.edit_message_text("🎁 Send number of coins to gift all users.", reply_markup=back_button())
     elif query.data == "admin_back":
         await query.edit_message_text("🔙 Back to Admin Panel", reply_markup=get_admin_panel())
 
@@ -329,20 +330,35 @@ async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Broadcast Done!\n📤 Sent: {total}\n❌ Failed: {failed}")
 
 async def handle_gift_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id) or not context.user_data.get("awaiting_gift"):
+    logger.info("handle_gift_points triggered")
+    if not is_admin(update.effective_user.id):
+        logger.info("Not admin")
         return
+    if not context.user_data.get("awaiting_gift"):
+        logger.info("awaiting_gift not set")
+        return
+
     context.user_data["awaiting_gift"] = False
+
     try:
         coins = int(update.message.text)
     except ValueError:
+        logger.warning("Invalid input")
         return await update.message.reply_text("❌ Invalid number of coins.")
+
+    logger.info(f"Gifting {coins} coins to all users...")
+    
+    banned_ids = {doc["_id"] async for doc in db.banned.find({})}
     total = 0
+
     async for user in db.users.find({}):
-        if await db.banned.find_one({"_id": user["_id"]}):
+        if user["_id"] in banned_ids:
             continue
         await db.users.update_one({"_id": user["_id"]}, {"$inc": {"points": coins}})
         total += 1
+
     await update.message.reply_text(f"✅ Gifted {coins} coins to {total} users.")
+    logger.info(f"Gift success for {total} users.")
 
 # --- MAIN BOT RUNNER ---
 def main():
