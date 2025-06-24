@@ -159,7 +159,7 @@ async def send_random(update, context, collection, seen_field):
         return await update.message.reply_text("📭 No more new content. Come back later!")
 
     msg_id = doc[0]["msg_id"]
-    await context.bot.copy_message(uid, VAULT_CHANNEL_ID, msg_id)
+    await context.bot.copy_message(uid, VAULT_CHANNEL_ID, msg_id, protect_content=True)
 
     if not is_admin(uid):
         await db.users.update_one({"_id": uid}, {"$inc": {"points": -1}})
