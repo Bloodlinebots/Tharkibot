@@ -277,10 +277,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_broadcast"] = True
         await query.edit_message_text("📢 Send the message to broadcast.", reply_markup=back_button())
     elif query.data == "admin_gift":
-    logger.info("Gift mode ON")
-    context.user_data.clear()
-    context.user_data["awaiting_gift"] = True
-    await query.edit_message_text("🎁 Send number of coins to gift all users.", reply_markup=back_button())
+        logger.info("Gift mode ON")
+        context.user_data.clear()
+        context.user_data["awaiting_gift"] = True
+        await query.edit_message_text("🎁 Send number of coins to gift all users.", reply_markup=back_button())
     elif query.data == "admin_back":
         await query.edit_message_text("🔙 Back to Admin Panel", reply_markup=get_admin_panel())
 
