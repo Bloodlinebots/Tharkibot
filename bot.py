@@ -1,4 +1,4 @@
- os
+import os
 import logging
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
