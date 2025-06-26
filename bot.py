@@ -19,9 +19,9 @@ VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
 ADMIN_USER_ID = 7755789304
 DEVELOPER_LINK = "https://t.me/unbornvillian"
-SUPPORT_LINK = "https://t.me/botmine_tech"
+SUPPORT_LINK = "https://t.me/valahallah"
 TERMS_LINK = "https://t.me/bot_backup/7"
-WELCOME_IMAGE = "https://graph.org/file/a13e9733afdad69720d67.jpg"
+WELCOME_IMAGE = "https://graph.org/file/d367814bc3243e72917ab-9f1d63e7b3f46b6716.jpg"
 
 FORCE_JOIN_CHANNELS = [
     {"type": "public", "username": "bot_backup", "name": "RASILI CHU💦"},
@@ -79,18 +79,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
-    await context.bot.send_message(LOG_CHANNEL_ID, f"👤 New user: {user.full_name} | ID: {uid}")
+await context.bot.send_message(LOG_CHANNEL_ID, f"👤 New user: {user.full_name} | ID: {uid}")
 
-    bot_name = (await context.bot.get_me()).first_name
-    await update.message.reply_photo(
-        photo=WELCOME_IMAGE,
-        caption=f"🥵 Welcome to *{bot_name}*!\nGet the hottest unseen 💦 content!\n👇 Tap the menu below to begin.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("👨‍💻 Developer", url=DEVELOPER_LINK)],
-            [InlineKeyboardButton("👥 Support", url=SUPPORT_LINK), InlineKeyboardButton("📃 Terms", url=TERMS_LINK)],
-        ]),
-        parse_mode="Markdown"
-    )
+bot_name = (await context.bot.get_me()).first_name
+caption = (
+    f"*😈 WELCOME TO {bot_name}!*\\n"
+    "Uncover the naughtiest unseen drops 💦 just for you.\\n"
+    "👇 Smash the menu button and enjoy!\\n"
+    "\\`⚡ Note: This is the official bot of the Vallalah Team.\\`"
+)
+
+await update.message.reply_photo(
+    photo=WELCOME_IMAGE,
+    caption=caption,
+    reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("👨‍💻 Developer", url=DEVELOPER_LINK)],
+        [InlineKeyboardButton("👥 Support", url=SUPPORT_LINK), InlineKeyboardButton("📃 Terms", url=TERMS_LINK)],
+    ]),
+    parse_mode="MarkdownV2"
+)
     await update.message.reply_text("👇 Choose from the menu:", reply_markup=main_keyboard())
 
 async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -139,6 +146,7 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text(f"⚠️ Unknown error: {e}")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await is_sudo(uid):
         return
@@ -149,7 +157,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if exists:
             return await update.message.reply_text("⚠️ Already exists in vault.")
         try:
-            sent = await context.bot.copy_message(
+            sent = await context.bot.forward_message(
                 chat_id=VAULT_CHANNEL_ID,
                 from_chat_id=uid,
                 message_id=update.message.message_id
@@ -158,11 +166,11 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "msg_id": sent.message_id,
                 "unique_id": unique_id
             })
-            await update.message.reply_text("✅ Saved to vault.")
+            await update.message.reply_text("✅ Forwarded to vault.")
         except Exception as e:
             await update.message.reply_text(f"❌ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error from {uid}: {e}")
-
+            
 async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     uid = query.from_user.id
