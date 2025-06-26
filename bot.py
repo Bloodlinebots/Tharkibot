@@ -53,7 +53,6 @@ async def check_force_join(uid, bot):
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
 
@@ -101,6 +100,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text("👇 Choose from the menu:", reply_markup=main_keyboard())
+
 async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if await db.banned.find_one({"_id": uid}):
@@ -147,7 +147,6 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text(f"⚠️ Unknown error: {e}")
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await is_sudo(uid):
         return
@@ -171,7 +170,7 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text(f"❌ Upload failed: {e}")
             await context.bot.send_message(LOG_CHANNEL_ID, f"❌ Upload error from {uid}: {e}")
-            
+
 async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     uid = query.from_user.id
