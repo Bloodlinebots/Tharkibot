@@ -53,6 +53,7 @@ async def check_force_join(uid, bot):
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = update.effective_user
 
@@ -79,27 +80,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     await db.users.update_one({"_id": uid}, {"$set": {"_id": uid}}, upsert=True)
-await context.bot.send_message(LOG_CHANNEL_ID, f"👤 New user: {user.full_name} | ID: {uid}")
+    await context.bot.send_message(LOG_CHANNEL_ID, f"👤 New user: {user.full_name} | ID: {uid}")
 
-bot_name = (await context.bot.get_me()).first_name
-caption = (
-    f"*😈 WELCOME TO {bot_name}!*\\n"
-    "Uncover the naughtiest unseen drops 💦 just for you.\\n"
-    "👇 Smash the menu button and enjoy!\\n"
-    "\\`⚡ Note: This is the official bot of the Vallalah Team.\\`"
-)
+    bot_name = (await context.bot.get_me()).first_name
+    caption = (
+        f"*😈 WELCOME TO {bot_name}!*\\n"
+        "Uncover the naughtiest unseen drops 💦 just for you.\\n"
+        "👇 Smash the menu button and enjoy!\\n"
+        "\\`⚡ Note: This is the official bot of the Vallalah Team.\\`"
+    )
 
-await update.message.reply_photo(
-    photo=WELCOME_IMAGE,
-    caption=caption,
-    reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("👨‍💻 Developer", url=DEVELOPER_LINK)],
-        [InlineKeyboardButton("👥 Support", url=SUPPORT_LINK), InlineKeyboardButton("📃 Terms", url=TERMS_LINK)],
-    ]),
-    parse_mode="MarkdownV2"
-)
+    await update.message.reply_photo(
+        photo=WELCOME_IMAGE,
+        caption=caption,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👨‍💻 Developer", url=DEVELOPER_LINK)],
+            [InlineKeyboardButton("👥 Support", url=SUPPORT_LINK), InlineKeyboardButton("📃 Terms", url=TERMS_LINK)],
+        ]),
+        parse_mode="MarkdownV2"
+    )
+
     await update.message.reply_text("👇 Choose from the menu:", reply_markup=main_keyboard())
-
 async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if await db.banned.find_one({"_id": uid}):
