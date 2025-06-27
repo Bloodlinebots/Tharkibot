@@ -29,7 +29,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 # Static configuration values for the bot.
 VAULT_CHANNEL_ID = -1002564608005  # Channel where videos are stored.
 LOG_CHANNEL_ID = -1002624785490    # Channel for logging bot activities.
-ADMIN_USER_IDS = 7571188923   , 7755789304       # Telegram user ID of the bot admin.
+ADMIN_USER_ID = 7755789304         # Telegram user ID of the bot admin.
 DEVELOPER_LINK = "https://t.me/PSYCHO_X_KING"
 SUPPORT_LINK = "https://t.me/valahallah"
 TERMS_LINK = "https://t.me/bot_backup/7"
