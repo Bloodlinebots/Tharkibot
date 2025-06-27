@@ -17,8 +17,8 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
 VAULT_CHANNEL_ID = -1002564608005
 LOG_CHANNEL_ID = -1002624785490
-ADMIN_USER_ID = 7755789304
-DEVELOPER_LINK = "https://t.me/unbornvillian"
+ADMIN_USER_ID = 7571188923
+DEVELOPER_LINK = "https://t.me/PSYCHO_X_KING"
 SUPPORT_LINK = "https://t.me/valahallah"
 TERMS_LINK = "https://t.me/bot_backup/7"
 WELCOME_IMAGE = "https://graph.org/file/d367814bc3243e72917ab-9f1d63e7b3f46b6716.jpg"
