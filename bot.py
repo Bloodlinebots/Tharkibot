@@ -29,7 +29,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 # Static configuration values for the bot.
 VAULT_CHANNEL_ID = -1002564608005  # Channel where videos are stored.
 LOG_CHANNEL_ID = -1002624785490    # Channel for logging bot activities.
-ADMIN_USER_ID = 7571188923         # Telegram user ID of the bot admin.
+ADMIN_USER_IDS = 7571188923   , 7755789304       # Telegram user ID of the bot admin.
 DEVELOPER_LINK = "https://t.me/PSYCHO_X_KING"
 SUPPORT_LINK = "https://t.me/valahallah"
 TERMS_LINK = "https://t.me/bot_backup/7"
@@ -133,7 +133,7 @@ async def send_welcome_message(user: User, chat: Chat, context: ContextTypes.DEF
     bot_name = (await context.bot.get_me()).first_name
     caption = (
         f"*😈 WELCOME TO {bot_name}\\!*\\n"
-        "get the naughtiest unseen videos 💦 just for you\\.\\n"
+        "Uncover the naughtiest unseen drops 💦 just for you\\.\\n"
         "👇 Smash the menu button and enjoy\\!\\n\n"
         "```⚡ Note: This is the official bot of the Vallalah Team.```"
     )
@@ -290,8 +290,7 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
            await update.message.reply_text("⚠️ A Telegram-related error occurred. Please try again.")
     except Exception as e:
         logger.error(f"Unexpected error in get_random_video: {e}")
-        await update.message.reply_text("⚠️ An unexpected error occurred. Please try again.")
-
+    
 
 async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sudo-only command to upload videos to the vault."""
