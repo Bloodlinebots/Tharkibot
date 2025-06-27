@@ -133,7 +133,7 @@ async def send_welcome_message(user: User, chat: Chat, context: ContextTypes.DEF
     bot_name = (await context.bot.get_me()).first_name
     caption = (
         f"*😈 WELCOME TO {bot_name}\\!*\\n"
-        "Uncover the naughtiest unseen drops 💦 just for you\\.\\n"
+        "get the naughtiest unseen videos 💦 just for you\\.\\n"
         "👇 Smash the menu button and enjoy\\!\\n\n"
         "```⚡ Note: This is the official bot of the Vallalah Team.```"
     )
