@@ -180,8 +180,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if ch["type"] == "public":
                     url = f"https://t.me/{ch['username']}"
                 else:
-                    invite_link = await context.bot.create_chat_invite_link(ch["chat_id"])
-                    url = invite_link.invite_link
+                    invite_link = await context.bot.create_chat_invite_link(
+    chat_id=ch["chat_id"],
+    expire_date=int(time.time()) + 86400,  # expires in 1 day
+    creates_join_request=False
+)
+url = invite_link.invite_link
                 buttons.append([InlineKeyboardButton(f"🔗 Join {ch['name']}", url=url)])
             except Exception as e:
                 logger.error(f"Could not create invite link for {ch['name']}: {e}")
