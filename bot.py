@@ -163,7 +163,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
 # ✅ Handle /start video_<msg_id> link
-if context.args and context.args[0].startswith("video_"):
+    if context.args and context.args[0].startswith("video_"):
     try:
         msg_id = int(context.args[0].split("_", 1)[1])
         await context.bot.copy_message(
