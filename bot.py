@@ -182,9 +182,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     invite_link = await context.bot.create_chat_invite_link(
     chat_id=ch["chat_id"],
-    expire_date=int(time.time()) + 86400,  # expires in 1 day
+    expire_date=int(time.time()) + 86400,
     creates_join_request=False
 )
+url = invite_link.invite_link
 url = invite_link.invite_link
                 buttons.append([InlineKeyboardButton(f"🔗 Join {ch['name']}", url=url)])
             except Exception as e:
