@@ -277,20 +277,19 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=msg_id,
             protect_content=True
         )
-        
-        bot_username = (await context.bot.get_me()).username
-start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
+         bot_username = (await context.bot.get_me()).username
+        start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
 
-await context.bot.send_message(
-    chat_id=uid,
-    text=(
-        "✅ Here's your random video.\n"
-        f"🔗 *Share this link to send this exact video to friends:*\n`{start_link}`\n\n"
-        "👇 Use the menu to get more!"
-    ),
-    reply_markup=main_keyboard(),
-    parse_mode="Markdown"
-)
+        await context.bot.send_message(
+            chat_id=uid,
+            text=(
+                "✅ Here's your random video.\n"
+                f"🔗 *Share this link to send this exact video to friends:*\n`{start_link}`\n\n"
+                "👇 Use the menu to get more!"
+            ),
+            reply_markup=main_keyboard(),
+            parse_mode="Markdown"
+        )
         
         # Update seen list in cache and DB
         seen_videos.append(msg_id)
