@@ -277,7 +277,7 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=msg_id,
             protect_content=True
         )
-         bot_username = (await context.bot.get_me()).username
+        bot_username = (await context.bot.get_me()).username
         start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
 
         await context.bot.send_message(
