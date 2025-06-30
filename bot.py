@@ -8,7 +8,6 @@ from telegram import (
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-
     CallbackQueryHandler, ContextTypes, filters
 )
 from telegram.error import BadRequest, TelegramError
@@ -107,7 +106,7 @@ def main_keyboard() -> ReplyKeyboardMarkup:
         ["ℹ️ Help", "📃 Terms"]
     ], resize_keyboard=True)
 
-async def check_force_join(uid: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def check_force_join(uid: int, bot) -> bool:
     """Checks if a user has joined all required channels, using a cache."""
     cached = cache.get(f"joined_{uid}")
     if cached is not None:
@@ -116,12 +115,12 @@ async def check_force_join(uid: int, context: ContextTypes.DEFAULT_TYPE) -> bool
     for channel in FORCE_JOIN_CHANNELS:
         try:
             chat_id = f"@{channel['username']}" if channel["type"] == "public" else channel["chat_id"]
-            member = await context.bot.get_chat_member(chat_id, uid)
+            member = await bot.get_chat_member(chat_id, uid)
             if member.status in ["left", "kicked"]:
                 cache.set(f"joined_{uid}", False, ttl=300) # Cache negative result
                 return False
         except Exception as e:
-            logger.error(f"Error checking channel {channel.get('name', 'N/A')} for user {uid}: {e}")
+            logger.error(f"Error checking channel {channel.get('name', 'N/A')}: {e}")
             return False # Fail safely
     
     cache.set(f"joined_{uid}", True, ttl=300) # Cache positive result
@@ -163,6 +162,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
 
+    # ✅ Handle /start video_<msg_id> link
+    if context.args and context.args[0].startswith("video_"):
+        try:
+            msg_id = int(context.args[0].split("_", 1)[1])
+            await context.bot.copy_message(
+                chat_id=uid,
+                from_chat_id=VAULT_CHANNEL_ID,
+                message_id=msg_id,
+                protect_content=True
+            )
+            await context.bot.send_message(
+                chat_id=uid,
+                text="🎁 Here's the shared video! Enjoy 😈",
+                reply_markup=main_keyboard()
+            )
+            return
+        except Exception as e:
+            logger.error(f"Error loading shared video: {e}")
+            await update.message.reply_text("⚠️ Couldn't load the shared video.")
+            return
+        
     # Check if the user is banned
     banned = cache.get(f"banned_{uid}")
     if banned is None:
@@ -173,7 +193,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Check if user has joined all required channels
-    if not await check_force_join(uid, context):
+    if not await check_force_join(uid, context.bot):
         buttons = []
         for ch in FORCE_JOIN_CHANNELS:
             try:
@@ -204,45 +224,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Add new user to the database and log the event if they don't exist
+    # Add new user to the database and log the event
     if not await db.users.find_one({"_id": uid}):
         await db.users.update_one({"_id": uid}, {"$set": {"name": user.full_name}}, upsert=True)
         asyncio.create_task(
             context.bot.send_message(
                 LOG_CHANNEL_ID,
-                f"👤 New user: {user.full_name} | ID: `{uid}`",
-                parse_mode="Markdown"
+                f"👤 New user: {user.full_name} | ID: `{uid}`"
             )
         )
 
-    # BUG FIX: Handle deep linking *after* the force-join check to prevent bypass.
-    if context.args and context.args[0].startswith("video_"):
-        try:
-            msg_id = int(context.args[0].split("_", 1)[1])
-            await context.bot.copy_message(
-                chat_id=uid,
-                from_chat_id=VAULT_CHANNEL_ID,
-                message_id=msg_id,
-                protect_content=True
-            )
-            await context.bot.send_message(
-                chat_id=uid,
-                text="🎁 Here's the shared video! Enjoy 😈",
-                reply_markup=main_keyboard()
-            )
-            return
-        except Exception as e:
-            logger.error(f"Error loading shared video for user {uid}: {e}")
-            await update.message.reply_text("⚠️ Couldn't load the shared video. Please use the menu below.")
-            # Fall through to send the welcome message
-    
     await send_welcome_message(user, update.effective_chat, context)
 
 async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Fetches and sends a random unseen video to the user."""
     uid = update.effective_user.id
     
-    # IMPROVEMENT: Re-check ban status here as well.
+    # Check if the user is banned
     if await db.banned.find_one({"_id": uid}):
         await update.message.reply_text("❌ You are banned from using this bot.")
         return
@@ -280,21 +278,19 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             protect_content=True
         )
         
-        # BUG FIX: This block was incorrectly indented, causing a syntax error.
-        # It is now correctly placed inside the 'try' block.
         bot_username = (await context.bot.get_me()).username
-        start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
+start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
 
-        await context.bot.send_message(
-            chat_id=uid,
-            text=(
-                "✅ Here's your random video.\n"
-                f"🔗 *Share this link to send this exact video to friends:*\n`{start_link}`\n\n"
-                "👇 Use the menu to get more!"
-            ),
-            reply_markup=main_keyboard(),
-            parse_mode="Markdown"
-        )
+await context.bot.send_message(
+    chat_id=uid,
+    text=(
+        "✅ Here's your random video.\n"
+        f"🔗 *Share this link to send this exact video to friends:*\n`{start_link}`\n\n"
+        "👇 Use the menu to get more!"
+    ),
+    reply_markup=main_keyboard(),
+    parse_mode="Markdown"
+)
         
         # Update seen list in cache and DB
         seen_videos.append(msg_id)
@@ -316,7 +312,6 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚠️ Removed broken video link. MSG_ID: `{msg_id}`",
                 parse_mode="Markdown"
             ))
-            # Retry getting a video for the user
             await get_random_video(update, context)
         else:
             logger.error(f"BadRequest error for user {uid}: {e}")
@@ -361,12 +356,11 @@ async def auto_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def force_check_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles the 'I've Joined' button press."""
     query = update.callback_query
-    
-    # Invalidate cache to ensure a fresh check
+    await query.answer()
+
     cache.delete(f"joined_{query.from_user.id}")
     
     if await check_force_join(query.from_user.id, context.bot):
-        await query.answer("✅ Thank you for joining!")
         await query.message.delete()
         await send_welcome_message(query.from_user, query.message.chat, context)
     else:
@@ -381,7 +375,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def terms_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles /terms and 'Terms' button by forwarding the terms message."""
     try:
-        # Ensure the bot is an admin in @bot_backup to forward messages
         await context.bot.forward_message(
             chat_id=update.effective_chat.id,
             from_chat_id="@bot_backup",
@@ -398,8 +391,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_sudo(update.effective_user.id):
         return
     
-    msg = await update.message.reply_text("⏳ Calculating stats...")
-
     stats = cache.get("stats")
     if stats is None:
         users_count = await db.users.count_documents({})
@@ -414,7 +405,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         cache.set("stats", stats, ttl=300)
     
-    await msg.edit_text(
+    await update.message.reply_text(
         f"📊 *Bot Statistics:*\n"
         f"👥 Total Users: `{stats['users']}`\n"
         f"🎞️ Videos in Vault: `{stats['videos']}`\n"
@@ -519,15 +510,13 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_to_broadcast = update.message.reply_to_message
     status_message = await update.message.reply_text("📢 Starting broadcast...")
     
-    # IMPROVEMENT: Process users in chunks to avoid high memory usage and be more scalable.
     users_cursor = db.users.find({}, {"_id": 1})
+    user_ids = [user["_id"] for user in await users_cursor.to_list(length=None)]
+    
     success_count = 0
     fail_count = 0
-    total_users = 0
     
-    async for user in users_cursor:
-        user_id = user["_id"]
-        total_users += 1
+    for user_id in user_ids:
         try:
             await context.bot.copy_message(
                 chat_id=user_id,
@@ -538,24 +527,13 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Broadcast failed for user {user_id}: {e}")
             fail_count += 1
+        await asyncio.sleep(0.1) # Avoid rate limits
         
-        # Avoid rate limits
-        await asyncio.sleep(0.1) 
-        
-        # Edit status message periodically
-        if (total_users % 100) == 0:
-            await status_message.edit_text(
-                f"📢 Broadcasting in progress...\n"
-                f"✅ Sent: {success_count}\n"
-                f"❌ Failed: {fail_count}\n"
-                f"👥 Processed: {total_users}"
-            )
-
     await status_message.edit_text(
-        f"📢 Broadcasting complete!\n"
-        f"✅ Sent to: {success_count} users\n"
-        f"❌ Failed for: {fail_count} users"
-    )
+    f"📢 Broadcasting complete!\n"
+    f"✅ Sent to: {success_count} users\n"
+    f"❌ Failed for: {fail_count} users"
+)
 
 # --- Error Handling ---
 
@@ -622,4 +600,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+    logger.info("Bot stopped.") 
