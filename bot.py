@@ -206,7 +206,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     creates_join_request=False
 )
 url = invite_link.invite_link
-url = invite_link.invite_link
                 buttons.append([InlineKeyboardButton(f"🔗 Join {ch['name']}", url=url)])
             except Exception as e:
                 logger.error(f"Could not create invite link for {ch['name']}: {e}")
