@@ -503,10 +503,10 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(0.1) # Avoid rate limits
         
     await status_message.edit_text(
-        f" broadcasting complete!\n"
-        f"✅ Sent to: {success_count} users\n"
-        f"❌ Failed for: {fail_count} users"
-    )
+    f"📢 Broadcasting complete!\n"
+    f"✅ Sent to: {success_count} users\n"
+    f"❌ Failed for: {fail_count} users"
+)
 
 # --- Error Handling ---
 
@@ -559,7 +559,7 @@ def main():
     application.add_handler(CallbackQueryHandler(force_check_callback, pattern="^force_check$"))
 
     # Message handlers for reply keyboard buttons
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex("(?i)^🎥 Get Random Video$"), get_random_video))
+    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"(?i)^🎥 Get Random Video$"), get_random_video))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex("(?i)^ℹ️ Help$"), help_command))
     application.add_handler(MessageHandler(filters.TEXT & filters.Regex("(?i)^📃 Terms$"), terms_command))
     
