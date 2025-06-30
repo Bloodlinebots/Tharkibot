@@ -197,20 +197,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons = []
         for ch in FORCE_JOIN_CHANNELS:
             try:
-            try:
-    if ch["type"] == "public":
-        url = f"https://t.me/{ch['username']}"
-    else:
-        invite_link = await context.bot.create_chat_invite_link(
-            chat_id=ch["chat_id"],
-            expire_date=int(time.time()) + 86400,
-            creates_join_request=False
-        )
-        url = invite_link.invite_link  # ✅ Move this inside try
-    buttons.append([InlineKeyboardButton(f"🔗 Join {ch['name']}", url=url)])
-except Exception as e:
-    logger.error(f"Could not create invite link for {ch['name']}: {e}")
-        
+                if ch["type"] == "public":
+                    url = f"https://t.me/{ch['username']}"
+                else:
+                    invite_link = await context.bot.create_chat_invite_link(
+                        chat_id=ch["chat_id"],
+                        expire_date=int(time.time()) + 86400,
+                        creates_join_request=False
+                    )
+                    url = invite_link.invite_link
+                buttons.append([InlineKeyboardButton(f"🔗 Join {ch['name']}", url=url)])
+            except Exception as e:
+                logger.error(f"Could not create invite link for {ch['name']}: {e}")
+
         buttons.append([InlineKeyboardButton("✅ I've Joined", callback_data="force_check")])
         await update.message.reply_text(
             "*🚫 Access Denied!*\n\n"
