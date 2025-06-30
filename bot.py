@@ -162,7 +162,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles the /start command."""
     user = update.effective_user
     uid = user.id
-
+# ✅ Handle /start video_<msg_id> link
+if context.args and context.args[0].startswith("video_"):
+    try:
+        msg_id = int(context.args[0].split("_", 1)[1])
+        await context.bot.copy_message(
+            chat_id=uid,
+            from_chat_id=VAULT_CHANNEL_ID,
+            message_id=msg_id,
+            protect_content=True
+        )
+        await context.bot.send_message(
+            chat_id=uid,
+            text="🎁 Here's the shared video! Enjoy 😈",
+            reply_markup=main_keyboard()
+        )
+        return
+    except Exception as e:
+        logger.error(f"Error loading shared video: {e}")
+        await update.message.reply_text("⚠️ Couldn't load the shared video.")
+        return
+        
     # Check if the user is banned
     banned = cache.get(f"banned_{uid}")
     if banned is None:
@@ -259,11 +279,19 @@ async def get_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             protect_content=True
         )
         
-        await context.bot.send_message(
-            chat_id=uid,
-            text="✅ Here's your random video.\n👇 Use the menu to get more!",
-            reply_markup=main_keyboard()
-        )
+        bot_username = (await context.bot.get_me()).username
+start_link = f"https://t.me/{bot_username}?start=video_{msg_id}"
+
+await context.bot.send_message(
+    chat_id=uid,
+    text=(
+        "✅ Here's your random video.\n"
+        f"🔗 *Share this link to send this exact video to friends:*\n`{start_link}`\n\n"
+        "👇 Use the menu to get more!"
+    ),
+    reply_markup=main_keyboard(),
+    parse_mode="Markdown"
+)
         
         # Update seen list in cache and DB
         seen_videos.append(msg_id)
